@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Pixel Game — a pocket arcade of quick, fun browser games for spare time. No downloads, no sign-ups, just click and play.">
+<title>Pixel Game — Play Quick Browser Games</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0618'/><rect x='2' y='2' width='12' height='12' fill='%2339ff14'/></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="hub-main">
+
+  <header class="sign">
+    <h1 class="logo">PIXEL GAME</h1>
+    <p class="tagline">CLICK · PLAY · PASS THE TIME</p>
+  </header>
+
+  <section class="gallery">
+    <a class="card" href="games/fighter.html" style="--accent:#ff2d95">
+      <canvas class="demo" id="demoFighter" width="360" height="150"></canvas>
+      <div class="card-body">
+        <h2>PIXEL FIGHTER</h2>
+        <p>A horizontal brawler: punch, kick, jump and block against the CPU. Best of three rounds decides the champion.</p>
+        <span class="play-btn">PLAY ▶</span>
+      </div>
+    </a>
+
+    <a class="card" href="games/fps.html" style="--accent:#00f0ff">
+      <canvas class="demo" id="demoFps" width="360" height="150"></canvas>
+      <div class="card-body">
+        <h2>PIXEL SHOOTER</h2>
+        <p>A first-person arena: strafe, aim and blast the demons before they get you. WASD + mouse, classic style.</p>
+        <span class="play-btn">PLAY ▶</span>
+      </div>
+    </a>
+
+    <a class="card" href="games/snake.html" style="--accent:#39ff14">
+      <canvas class="demo" id="demoSnake" width="360" height="150"></canvas>
+      <div class="card-body">
+        <h2>PIXEL SNAKE</h2>
+        <p>The timeless grid classic. Eat, grow, and don't bite your own tail. How long can you get?</p>
+        <span class="play-btn">PLAY ▶</span>
+      </div>
+    </a>
+  </section>
+
+  <footer class="hub-footer">
+    BUILT WITH <b>HTML</b> · <b>CSS</b> · <b>JS</b> — NO LIBRARIES, NO FRAMEWORKS
+  </footer>
+</main>
+
+<script>
+/* ============================================================
+   Animated demo thumbnails (pure canvas, tiny loops)
+   ============================================================ */
+
+/* ---- demo 1: two pixel fighters sparring ---- */
+(function () {
+  const c = document.getElementById('demoFighter');
+  const x = c.getContext('2d');
+
+  function drawFighter(cx, gy, color, dark, punch, t) {
+    x.fillStyle = 'rgba(0,0,0,0.4)';
+    x.fillRect(cx - 14, gy + 2, 28, 5);
+    // legs
+    x.fillStyle = dark;
+    x.fillRect(cx - 10, gy - 12, 9, 12);
+    x.fillRect(cx + 1, gy - 12, 9, 12);
+    // torso
+    x.fillStyle = color;
+    x.fillRect(cx - 10, gy - 28, 20, 17);
+    x.fillStyle = 'rgba(0,0,0,0.35)';
+    x.fillRect(cx - 10, gy - 14, 20, 3);
+    // head
+    x.fillStyle = '#e8b07a';
+    x.fillRect(cx - 8, gy - 38, 16, 11);
+    x.fillStyle = dark;
+    x.fillRect(cx - 8, gy - 38, 16, 4);
+    // eyes
+    x.fillStyle = '#fff';
+    x.fillRect(cx + 3, gy - 33, 2, 3);
+    // arm
+    if (punch > 0) {
+      x.fillStyle = color;
+      x.fillRect(cx + 9, gy - 26 + Math.sin(t * 60) * 1.5, 15, 6);
+      x.fillStyle = '#e8b07a';
+      x.fillRect(cx + 22, gy - 27 + Math.sin(t * 60) * 1.5, 6, 8);
+    } else {
+      x.fillStyle = color;
+      x.fillRect(cx + 8, gy - 26, 7, 12);
+    }
+  }
+
+  let t0 = performance.now();
+  (function loop(now) {
+    const t = (now - t0) / 1000;
+    x.fillStyle = '#0d0620';
+    x.fillRect(0, 0, c.width, c.height);
+    x.fillStyle = '#241538';
+    x.fillRect(0, 108, c.width, 42);
+    // floor grid
+    x.fillStyle = '#2d1b48';
+    for (let i = 0; i < c.width; i += 24) x.fillRect(i, 108, 12, 4);
+    x.fillStyle = '#3a2a5e';
+    x.fillRect(0, 108, c.width, 2);
+
+    const phase = (t / 2.6) % 1;
+    const dir = phase < 0.5 ? 1 : -1;
+    const p1x = 40 + Math.min(phase, 0.5) * 2 * 130;
+    const p2x = c.width - 40 - Math.min(phase, 0.5) * 2 * 130;
+    const attacking = (phase >= 0.45 && phase < 0.5) || (phase >= 0.95);
+    const p1Punch = attacking && dir === 1 ? 1 : 0;
+    const p2Punch = attacking && dir === -1 ? 1 : 0;
+    drawFighter(p1x, 108, '#3f7dff', '#1b3d7a', p1Punch, t);
+    drawFighter(p2x, 108, '#ff4d4d', '#7a1b1b', p2Punch, t);
+    requestAnimationFrame(loop);
+  })(t0);
+})();
+
+/* ---- demo 2: mini raycasting corridor, slowly rotating ---- */
+(function () {
+  const c = document.getElementById('demoFps');
+  const x = c.getContext('2d');
+  const W = c.width, H = c.height;
+  const MAP = [
+    '1111111111111111',
+    '1000000000000001',
+    '1000000000000001',
+    '1000020000000001',
+    '1000000000000001',
+    '1000000000000001',
+    '1000000000000001',
+    '1000000000000001',
+    '1000000000000001',
+    '1000000000000001',
+    '1000000000000001',
+    '1000000000000001',
+    '1000000000000001',
+    '1000000000000001',
+    '1000000000000001',
+    '1111111111111111'
+  ];
+  const grid = MAP.map(r => r.split('').map(Number));
+  const px = 8.5, py = 8.5;
+  const fov = 0.9; // radians
+  const RAYS = 120;
+  const zbuf = new Array(RAYS);
+  let ang = 0;
+
+  function cast() {
+    const dirX = Math.cos(ang), dirY = Math.sin(ang);
+    const plX = -Math.sin(ang) * Math.tan(fov / 2), plY = Math.cos(ang) * Math.tan(fov / 2);
+    for (let i = 0; i < RAYS; i++) {
+      const cam = 2 * i / RAYS - 1;
+      const rx = dirX + plX * cam, ry = dirY + plY * cam;
+      let mx = Math.floor(px), my = Math.floor(py);
+      const ddX = Math.abs(rx) < 1e-9 ? 1e9 : Math.abs(1 / rx);
+      const ddY = Math.abs(ry) < 1e-9 ? 1e9 : Math.abs(1 / ry);
+      let sx, sy, sdX, sdY, side;
+      if (rx < 0) { sx = -1; sdX = (px - mx) * ddX; } else { sx = 1; sdX = (mx + 1 - px) * ddX; }
+      if (ry < 0) { sy = -1; sdY = (py - my) * ddY; } else { sy = 1; sdY = (my + 1 - py) * ddY; }
+      let hit = 0;
+      while (!hit) {
+        if (sdX < sdY) { sdX += ddX; mx += sx; side = 0; } else { sdY += ddY; my += sy; side = 1; }
+        if (grid[my][mx] > 0) hit = 1;
+      }
+      const d = side === 0 ? sdX - ddX : sdY - ddY;
+      zbuf[i] = d;
+      const hgt = H / d;
+      const y0 = (H - hgt) / 2;
+      const t = grid[my][mx];
+      let r = t === 2 ? 165 : 58, g = t === 2 ? 45 : 110, b = t === 2 ? 45 : 170;
+      const sh = Math.max(0, 1 - d / 9) * (side ? 0.65 : 1);
+      x.fillStyle = 'rgb(' + (r * sh | 0) + ',' + (g * sh | 0) + ',' + (b * sh | 0) + ')';
+      x.fillRect(i * 3, y0, 3, hgt);
+      // brick lines
+      x.fillStyle = 'rgba(0,0,0,0.25)';
+      for (let yy = y0 + 6; yy < y0 + hgt; yy += 9) x.fillRect(i * 3, yy, 3, 1);
+    }
+  }
+
+  (function loop(now) {
+    ang += 0.0012;
+    x.fillStyle = '#0b0714'; x.fillRect(0, 0, W, H / 2);
+    x.fillStyle = '#1d1030'; x.fillRect(0, H / 2, W, H / 2);
+    cast();
+    // demon sprite in the middle distance
+    const dx = 8.5 - px, dy = 8.5 - py;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    const inFront = Math.abs(Math.atan2(dy, dx) - ang) < 0.4;
+    if (inFront && d < 5) {
+      const hgt = H / d * 0.8;
+      const w = hgt * 0.55;
+      const x0 = W / 2 - w / 2, y0 = H / 2 + H / (2 * d) - hgt;
+      x.fillStyle = '#c03333';
+      x.fillRect(x0 + w * 0.2, y0 + hgt * 0.45, w * 0.6, hgt * 0.55);
+      x.fillRect(x0 + w * 0.1, y0 + hgt * 0.6, w * 0.12, hgt * 0.3);
+      x.fillRect(x0 + w * 0.78, y0 + hgt * 0.6, w * 0.12, hgt * 0.3);
+      x.fillStyle = '#ff5544';
+      x.fillRect(x0 + w * 0.3, y0, w * 0.4, hgt * 0.4);
+      x.fillStyle = '#ffe08a';
+      x.fillRect(x0 + w * 0.3, y0 + hgt * 0.18, w * 0.1, hgt * 0.1);
+      x.fillRect(x0 + w * 0.6, y0 + hgt * 0.18, w * 0.1, hgt * 0.1);
+    }
+    requestAnimationFrame(loop);
+  })(0);
+})();
+
+/* ---- demo 3: snake that plays itself ---- */
+(function () {
+  const c = document.getElementById('demoSnake');
+  const x = c.getContext('2d');
+  const CELL = 12, COLS = 30, ROWS = 12;
+  let snake = [{ x: 6, y: 5 }, { x: 5, y: 5 }, { x: 4, y: 5 }];
+  let dir = { x: 1, y: 0 };
+  let food = { x: 20, y: 6 };
+  let acc = 0;
+
+  function newFood() {
+    do { food = { x: (Math.random() * COLS) | 0, y: (Math.random() * ROWS) | 0 }; }
+    while (snake.some(s => s.x === food.x && s.y === food.y));
+  }
+
+  (function loop(now) {
+    acc += 16;
+    x.fillStyle = '#0d0620';
+    x.fillRect(0, 0, c.width, c.height);
+    x.fillStyle = 'rgba(255,255,255,0.05)';
+    for (let i = 0; i < COLS; i++) for (let j = 0; j < ROWS; j++) {
+      if ((i + j) % 2 === 0) x.fillRect(i * CELL, j * CELL, CELL, CELL);
+    }
+    // apple
+    x.fillStyle = '#ff2d2d';
+    x.fillRect(food.x * CELL + 2, food.y * CELL + 2, CELL - 4, CELL - 4);
+    x.fillStyle = '#39ff14';
+    x.fillRect(food.x * CELL + 5, food.y * CELL - 2, 3, 4);
+    // snake
+    for (let i = snake.length - 1; i >= 0; i--) {
+      const s = snake[i];
+      x.fillStyle = i === 0 ? '#9dff8a' : (i % 2 ? '#39ff14' : '#2bbf0e');
+      x.fillRect(s.x * CELL + 1, s.y * CELL + 1, CELL - 2, CELL - 2);
+      if (i === 0) {
+        x.fillStyle = '#000';
+        x.fillRect(s.x * CELL + 3 + (dir.x === 1 ? 4 : 0), s.y * CELL + 4, 2, 2);
+        x.fillRect(s.x * CELL + 3 + (dir.x === 1 ? 4 : 0), s.y * CELL + 7, 2, 2);
+      }
+    }
+    if (acc > 140) {
+      acc = 0;
+      const head = snake[0];
+      const nx = head.x + dir.x, ny = head.y + dir.y;
+      if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS || snake.some(s => s.x === nx && s.y === ny)) {
+        snake = [{ x: 6, y: 5 }, { x: 5, y: 5 }, { x: 4, y: 5 }];
+        dir = { x: 1, y: 0 };
+        newFood();
+      } else {
+        snake.unshift({ x: nx, y: ny });
+        if (nx === food.x && ny === food.y) newFood(); else snake.pop();
+      }
+    }
+    requestAnimationFrame(loop);
+  })(0);
+})();
+</script>
+</body>
+</html>
