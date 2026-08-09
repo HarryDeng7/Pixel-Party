@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Pixel Breakout - smash every brick before the ball escapes.">
+<title>Pixel Breakout — Pixel Game</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0618'/><rect x='2' y='2' width='12' height='12' fill='%23ff8a3d'/></svg>">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .stage-wrap { max-width: 520px; margin: 0 auto; }
+  .overlay h2.win  { color: var(--green); }
+  .overlay h2.lose { color: var(--pink); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="top-bar">
+    <a class="exit-arrow" href="../index.html" title="Back to all games">←</a>
+    <h1 class="game-title">PIXEL BREAKOUT</h1>
+    <button class="mute-btn" id="muteBtn">SOUND: ON</button>
+  </div>
+
+  <div class="stage-wrap">
+    <canvas id="game" width="480" height="540"></canvas>
+
+    <div id="startOverlay" class="overlay">
+      <h2>PIXEL BREAKOUT</h2>
+      <p class="ov-sub">&#x600e;&#x4e48;&#x73a9;&#xff1a;&#x2190;&#x2192; / &#x9f20;&#x6807; &#x79fb;&#x52a8;&#x6321;&#x677f;&#xff0c;&#x7a7a;&#x683c; &#x53d1;&#x7403;<br>
+      &#x600e;&#x4e48;&#x8d62;&#xff1a;&#x6253;&#x788e;&#x6240;&#x6709;&#x7816;&#x5757;&#x5c31;&#x8fc7;&#x5173;&#xff0c;&#x7403;&#x6389;&#x5149; 3 &#x6761;&#x547d;&#x5c31;&#x8f93;</p>
+      <button class="btn" id="startBtn">START</button>
+    </div>
+
+    <div id="pauseOverlay" class="overlay hidden">
+      <h2>PAUSED</h2>
+      <p class="ov-sub">press P to resume</p>
+    </div>
+
+    <div id="endOverlay" class="overlay hidden">
+      <h2 id="endTitle">YOU WIN!</h2>
+      <p class="ov-sub" id="finalScore">SCORE 0</p>
+      <button class="btn" id="restartBtn">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <p class="controls-hint">← → / MOUSE MOVE PADDLE · SPACE LAUNCH · P PAUSE · M SOUND</p>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const PAD_Y = 496, PAD_W = 84, PAD_H = 14, BALL = 12;
+  const BCOLS = 8, BROWS = 5, BW = 44, BH = 18, BX0 = 43, BY0 = 64, BGAP = 6;
+  const ROW_COLORS = ['#ff2d95', '#ff8a3d', '#ffe94a', '#39ff14', '#00f0ff'];
+
+  let actx = null, muted = false;
+  function ensureAudio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function tone(f0, f1, dur, type, vol, delay) {
+    if (muted) return;
+    const ac = ensureAudio(); if (!ac) return;
+    const t0 = ac.currentTime + (delay || 0);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(f0, t0);
+    if (f1) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t0 + dur);
+    g.gain.setValueAtTime(vol || 0.1, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  const sfx = {
+    paddle: () => tone(320, 440, 0.06, 'square', 0.07),
+    brick:  () => tone(520, 700, 0.07, 'square', 0.09),
+    wall:   () => tone(240, 240, 0.05, 'triangle', 0.06),
+    life:   () => tone(200, 90, 0.3, 'sawtooth', 0.12),
+    win:    () => [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.14, 'square', 0.1, i * 0.14)),
+    lose:   () => [400, 300, 200, 140].forEach((f, i) => tone(f, f, 0.16, 'sawtooth', 0.09, i * 0.16))
+  };  let bricks, px, ball, lives, score, state, over, paused, started;
+
+  function buildBricks() {
+    bricks = [];
+    for (let r = 0; r < BROWS; r++) {
+      for (let c = 0; c < BCOLS; c++) {
+        bricks.push({ x: BX0 + c * (BW + BGAP), y: BY0 + r * (BH + BGAP), alive: true, color: ROW_COLORS[r] });
+      }
+    }
+  }
+  function resetBall() {
+    ball = { x: px, y: PAD_Y - BALL / 2 - 4, vx: 0, vy: 0 };
+    state = 'ready';
+  }
+  function reset() {
+    px = W / 2;
+    buildBricks();
+    lives = 3; score = 0; over = false; paused = false;
+    resetBall();
+    document.getElementById('endOverlay').classList.add('hidden');
+    started = true;
+  }
+  function launch() {
+    if (state !== 'ready') return;
+    state = 'play';
+    ball.vx = (Math.random() < 0.5 ? -1 : 1) * 140;
+    ball.vy = -320;
+    sfx.paddle();
+  }
+  function setPaddle(v) { px = Math.max(PAD_W / 2, Math.min(W - PAD_W / 2, v)); }
+  function endGame(win) {
+    over = true;
+    if (win) sfx.win(); else sfx.lose();
+    const el = document.getElementById('endTitle');
+    el.textContent = win ? 'YOU WIN!' : 'GAME OVER';
+    el.className = win ? 'win' : 'lose';
+    document.getElementById('finalScore').textContent = 'SCORE ' + score;
+    document.getElementById('endOverlay').classList.remove('hidden');
+  }
+  const keys = {};
+  function update(dt) {
+    if (keys.arrowleft || keys.a) setPaddle(px - 430 * dt);
+    if (keys.arrowright || keys.d) setPaddle(px + 430 * dt);
+    if (state !== 'play') return;
+    ball.x += ball.vx * dt;
+    ball.y += ball.vy * dt;
+    if (ball.x < BALL / 2) { ball.x = BALL / 2; ball.vx = Math.abs(ball.vx); sfx.wall(); }
+    if (ball.x > W - BALL / 2) { ball.x = W - BALL / 2; ball.vx = -Math.abs(ball.vx); sfx.wall(); }
+    if (ball.y < BALL / 2) { ball.y = BALL / 2; ball.vy = Math.abs(ball.vy); sfx.wall(); }
+    if (ball.vy > 0 && ball.y + BALL / 2 >= PAD_Y && ball.y + BALL / 2 <= PAD_Y + PAD_H + 6 &&
+        ball.x > px - PAD_W / 2 - BALL / 2 && ball.x < px + PAD_W / 2 + BALL / 2) {
+      ball.vy = -Math.abs(ball.vy);
+      ball.vx = (ball.x - px) / (PAD_W / 2) * 260;
+      const sp = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+      ball.vx *= 340 / sp; ball.vy *= 340 / sp;
+      if (Math.abs(ball.vy) < 120) ball.vy = ball.vy < 0 ? -140 : 140;
+      ball.y = PAD_Y - BALL / 2 - 2;
+      sfx.paddle();
+    }
+    for (const b of bricks) {
+      if (!b.alive) continue;
+      if (ball.x + BALL / 2 > b.x && ball.x - BALL / 2 < b.x + BW &&
+          ball.y + BALL / 2 > b.y && ball.y - BALL / 2 < b.y + BH) {
+        b.alive = false;
+        score += 10;
+        const ox = (ball.x - (b.x + BW / 2)) / (BW / 2);
+        const oy = (ball.y - (b.y + BH / 2)) / (BH / 2);
+        if (Math.abs(ox) > Math.abs(oy)) ball.vx = ox > 0 ? Math.abs(ball.vx) : -Math.abs(ball.vx);
+        else ball.vy = oy > 0 ? Math.abs(ball.vy) : -Math.abs(ball.vy);
+        sfx.brick();
+        if (!bricks.some(x => x.alive)) endGame(true);
+        break;
+      }
+    }
+    if (ball.y > H + 30) {
+      lives--;
+      if (lives <= 0) endGame(false);
+      else { sfx.life(); resetBall(); }
+    }
+  }
+  document.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (['arrowleft', 'arrowright', ' '].indexOf(k === ' ' ? ' ' : k) >= 0) e.preventDefault();
+    if (e.repeat) return;
+    if (k === 'p') { togglePause(); return; }
+    if (k === 'm') { toggleMute(); return; }
+    if (k === 'enter' && over) { reset(); return; }
+    if (!started) { if (k === 'enter' || k === ' ') start(); return; }
+    if (over || paused) return;
+    keys[k] = true;
+    if (k === ' ') launch();
+  });
+  document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+  canvas.addEventListener('mousemove', (e) => {
+    const r = canvas.getBoundingClientRect();
+    setPaddle((e.clientX - r.left) / r.width * W);
+  });
+  canvas.addEventListener('click', () => { if (started && !over && !paused) launch(); });
+  function start() {
+    document.getElementById('startOverlay').classList.add('hidden');
+    started = true;
+  }
+  function toggleMute() {
+    muted = !muted;
+    document.getElementById('muteBtn').textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
+  }
+  function togglePause() {
+    if (over || !started) return;
+    paused = !paused;
+    document.getElementById('pauseOverlay').classList.toggle('hidden', !paused);
+  }
+  document.getElementById('startBtn').addEventListener('click', start);
+  document.getElementById('restartBtn').addEventListener('click', reset);
+  document.getElementById('muteBtn').addEventListener('click', toggleMute);  function draw() {
+    ctx.fillStyle = '#0d0620';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#241538';
+    ctx.fillRect(0, 0, W, 26);
+    for (const b of bricks) {
+      if (!b.alive) continue;
+      ctx.fillStyle = b.color;
+      ctx.fillRect(b.x, b.y, BW, BH);
+      ctx.fillStyle = 'rgba(255,255,255,0.28)';
+      ctx.fillRect(b.x, b.y, BW, 4);
+      ctx.fillRect(b.x, b.y, 4, BH);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(b.x + BW - 4, b.y, 4, BH);
+      ctx.fillRect(b.x, b.y + BH - 4, BW, 4);
+    }
+    ctx.fillStyle = '#00f0ff';
+    ctx.fillRect(px - PAD_W / 2, PAD_Y, PAD_W, PAD_H);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillRect(px - PAD_W / 2, PAD_Y, PAD_W, 4);
+    ctx.fillStyle = '#0a0618';
+    ctx.fillRect(px - PAD_W / 2, PAD_Y + PAD_H - 4, PAD_W, 4);
+    ctx.fillStyle = '#ffe94a';
+    ctx.fillRect(ball.x - BALL / 2, ball.y - BALL / 2, BALL, BALL);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillRect(ball.x - BALL / 2, ball.y - BALL / 2, 4, 4);
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 13px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('SCORE ' + score, 16, 40);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ff2d95';
+    let hearts = '';
+    for (let i = 0; i < lives; i++) hearts += '\u2665 ';
+    ctx.fillText(hearts.trim(), W - 16, 40);
+  }
+
+  /* ---------------- main loop ---------------- */
+  let last = performance.now();
+  function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    if (typeof last !== 'number' || !isFinite(last)) last = now;
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+    last = now;
+    if (started && !over && !paused) update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  reset();
+  started = false;
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -26,6 +26,13 @@
   <div class="stage-wrap">
     <canvas id="game" width="960" height="540"></canvas>
 
+    <div id="startOverlay" class="overlay">
+      <h2>PIXEL FIGHTER</h2>
+      <p class="ov-sub">&#x600E;&#x4E48;&#x73A9;&#xFF1A;A/D &#x79FB;&#x52A8; &#x00B7; W &#x8DF3; &#x00B7; S &#x6321; &#x00B7; J &#x62F3; &#x00B7; K &#x811A;</p>
+      <button class="btn" id="startBtn">START</button>
+      <p class="ov-sub" style="font-size:11px">&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x4E09;&#x5C40;&#x4E24;&#x80DC;&#xFF0C;&#x5148;&#x8D62;&#x4E24;&#x5C40;</p>
+    </div>
+
     <div id="endOverlay" class="overlay hidden">
       <h2 id="endTitle">PLAYER 1 WINS!</h2>
       <p class="ov-sub">The arena is yours, champion.</p>
@@ -98,7 +105,7 @@
   };
 
   /* ---------------- state ---------------- */
-  let p1, cpu, particles, t, round, roundState, roundT, introT, overT, matchOver, paused, lastWinner;
+  let p1, cpu, particles, t = 0, round, roundState, roundT, introT, overT, matchOver, paused, lastWinner, started;
 
   function makeFighter(x, facing, name, main, dark) {
     return {
@@ -125,7 +132,8 @@
   }
 
   function initMatch() {
-    round = 1; matchOver = false; paused = false;
+    round = 1; matchOver = false; paused = false; started = false;
+    document.getElementById('startOverlay').classList.remove('hidden');
     startRound();
   }
 
@@ -152,7 +160,7 @@
     if (k === 'k') edges.kick = true;
     if (k === 'p') { togglePause(); }
     if (k === 'm') { toggleMute(); }
-    if (k === 'enter' && matchOver) rematch();
+    if (k === 'enter') { if (matchOver) rematch(); else if (!started) startGame(); }
   });
   document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
   window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
@@ -164,7 +172,7 @@
   document.getElementById('muteBtn').addEventListener('click', toggleMute);
 
   function togglePause() {
-    if (matchOver || roundState === 'over') return;
+    if (matchOver || roundState === 'over' || !started) return;
     paused = !paused;
     document.getElementById('pauseOverlay').classList.toggle('hidden', !paused);
   }
@@ -173,6 +181,14 @@
   function rematch() {
     document.getElementById('endOverlay').classList.add('hidden');
     initMatch();
+    startGame();
+  }
+
+  document.getElementById('startBtn').addEventListener('click', startGame);
+  function startGame() {
+    if (started) return;
+    started = true;
+    document.getElementById('startOverlay').classList.add('hidden');
     sfx.round();
   }
 
@@ -563,11 +579,14 @@
   /* ---------------- main loop ---------------- */
   let last = performance.now();
   function loop(now) {
-    const dt = Math.min(0.05, (now - last) / 1000);
+    // Some sandboxed/embedded contexts omit the rAF timestamp - fall back safely
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    if (typeof last !== 'number' || !isFinite(last)) last = now;
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
     if (!paused) t += dt;
 
-    if (!paused && !matchOver) {
+    if (started && !paused && !matchOver) {
       if (roundState === 'intro') {
         introT -= dt;
         updateParticles(dt);

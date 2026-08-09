@@ -25,9 +25,9 @@
 
     <div id="startOverlay" class="overlay">
       <h2>PIXEL SNAKE</h2>
-      <p class="ov-sub">Eat the apples, grow longer, don't hit the walls — and never bite your own tail.</p>
+      <p class="ov-sub">&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x65B9;&#x5411;&#x952E; / WASD &#x8F6C;&#x5411;&#xFF0C;&#x5403;&#x82F9;&#x679C;</p>
       <button class="btn" id="startBtn">START</button>
-      <p class="ov-sub" style="font-size:11px">ARROWS / WASD to steer · P pause · M sound</p>
+      <p class="ov-sub" style="font-size:11px">&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x4E0D;&#x649E;&#x5899;&#x3001;&#x4E0D;&#x54AC;&#x81EA;&#x5DF1;&#xFF0C;&#x5206;&#x6570;&#x8D8A;&#x9AD8;&#x8D8A;&#x597D;</p>
     </div>
 
     <div id="pauseOverlay" class="overlay hidden">
@@ -264,7 +264,11 @@
   /* ---------------- loop ---------------- */
   let last = performance.now();
   function loop(now) {
-    const dt = now - last;
+
+    // Some sandboxed/embedded contexts omit the rAF timestamp - fall back safely
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    if (typeof last !== 'number' || !isFinite(last)) last = now;
+    const dt = Math.min(250, Math.max(0, now - last));
     last = now;
     if (running && !paused) {
       acc += dt;

@@ -28,9 +28,8 @@
     <div id="overlay" class="overlay">
       <h2 id="ovTitle">PIXEL SHOOTER</h2>
       <p class="ov-sub" id="ovSub">
-        The demons broke into the arena.<br>
-        CLICK TO LOCK YOUR MOUSE, then WASD to move, mouse to aim, click to shoot.<br>
-        Eliminate all 6 hostiles. ESC pauses — use ← to leave.
+        &#x600E;&#x4E48;&#x73A9;&#xFF1A;WASD &#x79FB;&#x52A8; &#x00B7; &#x9F20;&#x6807;&#x7784;&#x51C6; &#x00B7; &#x5DE6;&#x952E;&#x5C04;&#x51FB;<br>
+        &#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x6D88;&#x706D;&#x5168;&#x90E8; 6 &#x4E2A;&#x6076;&#x9B54;&#x3002;&#x70B9;&#x51FB;&#x9501;&#x5B9A;&#x9F20;&#x6807;&#x5F00;&#x59CB;&#xFF0C;ESC &#x6682;&#x505C;&#x3002;
       </p>
       <button class="btn" id="startBtn">START</button>
     </div>
@@ -598,7 +597,11 @@
   /* ---------------- loop ---------------- */
   let last = performance.now();
   function loop(now) {
-    const dt = Math.min(0.05, (now - last) / 1000);
+
+    // Some sandboxed/embedded contexts omit the rAF timestamp - fall back safely
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    if (typeof last !== 'number' || !isFinite(last)) last = now;
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
     const running = state === 'play' && (locked || fallback);
     if (running) update(dt);
