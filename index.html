@@ -7,8 +7,45 @@
 <title>Pixel Game &#x2014; Play Quick Browser Games</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0618'/><rect x='2' y='2' width='12' height='12' fill='%2339ff14'/></svg>">
 <link rel="stylesheet" href="style.css">
+<style>
+  .account-box { position: fixed; top: 12px; right: 12px; z-index: 60; display: flex; gap: 8px; align-items: center; }
+  .account-btn { background: #3b2b5e; color: #fff; border: 2px solid #6b4d8f; padding: 8px 14px; font: 800 12px "Courier New", monospace; cursor: pointer; }
+  .account-btn:hover { background: #4b3a74; }
+  .account-user { color: #b96bff; font: 700 12px "Courier New", monospace; }
+  .modal-mask { position: fixed; inset: 0; background: rgba(10,6,24,0.8); display: none; align-items: center; justify-content: center; z-index: 70; }
+  .modal-mask.open { display: flex; }
+  .modal { background: #1b1030; border: 2px solid #6b4d8f; padding: 24px; width: 300px; }
+  .modal h3 { color: #fff; font: 800 18px "Courier New", monospace; margin: 0 0 12px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tab { flex: 1; background: #241538; color: #8f8fcf; border: 2px solid #3b2b5e; padding: 7px 0; font: 800 12px "Courier New", monospace; cursor: pointer; }
+  .tab.active { background: #6b4d8f; color: #fff; border-color: #8a5fa8; }
+  .modal input { width: 100%; box-sizing: border-box; background: #0a0618; color: #fff; border: 2px solid #3b2b5e; padding: 9px 10px; margin-bottom: 10px; font: 12px "Courier New", monospace; outline: none; }
+  .modal input:focus { border-color: #8a5fa8; }
+  .submit { width: 100%; background: #b96bff; color: #0a0618; border: 0; padding: 10px 0; font: 800 13px "Courier New", monospace; cursor: pointer; }
+  .submit:disabled { opacity: 0.5; cursor: wait; }
+  .err { color: #ff4d6d; font: 11px "Courier New", monospace; min-height: 14px; margin-top: 8px; }
+  .hidden { display: none !important; }
+</style>
 </head>
 <body>
+<div class="account-box">
+  <span class="account-user hidden" id="accountUser"></span>
+  <button class="account-btn" id="accountBtn">SIGN IN</button>
+  <button class="account-btn hidden" id="signOutBtn">SIGN OUT</button>
+</div>
+<div class="modal-mask" id="authMask">
+  <div class="modal">
+    <h3>PIXEL ACCOUNT</h3>
+    <div class="tabs">
+      <button class="tab active" id="tabIn">SIGN IN</button>
+      <button class="tab" id="tabUp">SIGN UP</button>
+    </div>
+    <input type="email" id="authEmail" placeholder="EMAIL" autocomplete="email">
+    <input type="password" id="authPass" placeholder="PASSWORD" autocomplete="current-password">
+    <button class="submit" id="authSubmit">SIGN IN</button>
+    <p class="err" id="authErr"></p>
+  </div>
+</div>
 <main class="hub-main">
 
   <header class="sign">
@@ -67,6 +104,96 @@
       <div class="card-body">
         <h2>PIXEL FLAPPY</h2>
         <p>&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x7A7A;&#x683C; / &#x70B9;&#x51FB; &#x8BA9;&#x5C0F;&#x9E1F;&#x98DE;&#xFF5C;&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x7A7F;&#x8FC7;&#x7BA1;&#x9053;&#x5F97;&#x5206;&#xFF0C;&#x8D8A;&#x8FDC;&#x8D8A;&#x9AD8;</p>
+        <span class="play-btn">PLAY &#x25B6;</span>
+      </div>
+    </a>
+
+    <a class="card" href="games/pong.html" style="--accent:#4de3ff">
+      <canvas class="demo" id="demoPong" width="360" height="150"></canvas>
+      <div class="card-body">
+        <h2>PIXEL PONG</h2>
+        <p>&#x600E;&#x4E48;&#x73A9;&#xFF1A;W/S &#x6216; &#x2191;/&#x2193; &#x79FB;&#x52A8;&#x5DE6;&#x6321;&#x677F;&#xFF5C;&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x5148;&#x5F97; 7 &#x5206;&#xFF0C;&#x6321;&#x56DE;&#x5BF9;&#x65B9;&#x7684;&#x7403;</p>
+        <span class="play-btn">PLAY &#x25B6;</span>
+      </div>
+    </a>
+
+    <a class="card" href="games/invaders.html" style="--accent:#ffb03d">
+      <canvas class="demo" id="demoInvaders" width="360" height="150"></canvas>
+      <div class="card-body">
+        <h2>PIXEL INVADERS</h2>
+        <p>&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x2190;&#x2192; &#x79FB;&#x52A8; &#x00B7; &#x7A7A;&#x683C; &#x5C04;&#x51FB;&#xFF5C;&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x6D88;&#x706D;&#x5168;&#x90E8;&#x654C;&#x4EBA;&#xFF0C;&#x522B;&#x8BA9;&#x4ED6;&#x4EEC;&#x843D;&#x5730;</p>
+        <span class="play-btn">PLAY &#x25B6;</span>
+      </div>
+    </a>
+
+    <a class="card" href="games/asteroids.html" style="--accent:#ff7a6b">
+      <canvas class="demo" id="demoAsteroids" width="360" height="150"></canvas>
+      <div class="card-body">
+        <h2>PIXEL ASTEROIDS</h2>
+        <p>&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x2190;&#x2192; &#x65CB;&#x8F6C; &#x00B7; &#x2191; &#x63A8;&#x8FDB; &#x00B7; &#x7A7A;&#x683C; &#x5C04;&#x51FB;&#xFF5C;&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x6253;&#x788E;&#x6240;&#x6709;&#x5C0F;&#x884C;&#x661F;&#xFF0C;&#x522B;&#x88AB;&#x649E;&#x5230;</p>
+        <span class="play-btn">PLAY &#x25B6;</span>
+      </div>
+    </a>
+
+    <a class="card" href="games/maze.html" style="--accent:#8bff7a">
+      <canvas class="demo" id="demoMaze" width="360" height="150"></canvas>
+      <div class="card-body">
+        <h2>PIXEL MAZE</h2>
+        <p>&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x65B9;&#x5411;&#x952E; / WASD &#x79FB;&#x52A8;&#xFF5C;&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x4ECE;&#x5165;&#x53E3;&#x8D70;&#x5230;&#x7EFF;&#x8272;&#x51FA;&#x53E3;&#xFF0C;&#x5173;&#x5361;&#x8D8A;&#x6765;&#x8D8A;&#x96BE;</p>
+        <span class="play-btn">PLAY &#x25B6;</span>
+      </div>
+    </a>
+
+    <a class="card" href="games/2048.html" style="--accent:#ffd166">
+      <canvas class="demo" id="demo2048" width="360" height="150"></canvas>
+      <div class="card-body">
+        <h2>PIXEL 2048</h2>
+        <p>&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x65B9;&#x5411;&#x952E; / WASD &#x6ED1;&#x52A8;&#x65B9;&#x5757;&#xFF5C;&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x76F8;&#x540C;&#x6570;&#x5B57;&#x5408;&#x5E76;&#x7FFB;&#x500D;&#xFF0C;&#x51D1;&#x51FA; 2048</p>
+        <span class="play-btn">PLAY &#x25B6;</span>
+      </div>
+    </a>
+
+    <a class="card" href="games/memory.html" style="--accent:#c084fc">
+      <canvas class="demo" id="demoMemory" width="360" height="150"></canvas>
+      <div class="card-body">
+        <h2>PIXEL MEMORY</h2>
+        <p>&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x70B9;&#x51FB;&#x7FFB;&#x5F00;&#x5361;&#x7247;&#xFF0C;&#x8BB0;&#x4F4F;&#x56FE;&#x6848;&#xFF5C;&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x5168;&#x90E8;&#x914D;&#x5BF9;&#x6210;&#x529F;&#xFF0C;&#x6B65;&#x6570;&#x8D8A;&#x5C11;&#x8D8A;&#x597D;</p>
+        <span class="play-btn">PLAY &#x25B6;</span>
+      </div>
+    </a>
+
+    <a class="card" href="games/minesweeper.html" style="--accent:#f06595">
+      <canvas class="demo" id="demoMines" width="360" height="150"></canvas>
+      <div class="card-body">
+        <h2>PIXEL MINESWEEPER</h2>
+        <p>&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x5DE6;&#x952E;&#x7FFB;&#x5F00;&#x683C;&#x5B50; &#x00B7; &#x53F3;&#x952E;&#x63D2;&#x65D7;&#xFF5C;&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x6392;&#x9664;&#x6240;&#x6709;&#x5730;&#x96F7;&#xFF0C;&#x522B;&#x8E29;&#x5230;&#x70B8;&#x5F39;</p>
+        <span class="play-btn">PLAY &#x25B6;</span>
+      </div>
+    </a>
+
+    <a class="card" href="games/dodge.html" style="--accent:#ff9f43">
+      <canvas class="demo" id="demoDodge" width="360" height="150"></canvas>
+      <div class="card-body">
+        <h2>PIXEL DODGE</h2>
+        <p>&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x2190;&#x2192; &#x5DE6;&#x53F3;&#x79FB;&#x52A8;&#xFF0C;&#x8EB2;&#x5F00;&#x6389;&#x843D;&#x65B9;&#x5757;&#xFF5C;&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x575A;&#x6301; 60 &#x79D2;&#xFF0C;&#x5206;&#x6570;&#x8D8A;&#x9AD8;&#x8D8A;&#x597D;</p>
+        <span class="play-btn">PLAY &#x25B6;</span>
+      </div>
+    </a>
+
+    <a class="card" href="games/typing.html" style="--accent:#54a0ff">
+      <canvas class="demo" id="demoTyping" width="360" height="150"></canvas>
+      <div class="card-body">
+        <h2>PIXEL TYPING</h2>
+        <p>&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x6253;&#x51FA;&#x6389;&#x843D;&#x5355;&#x8BCD;&#x7684;&#x5B57;&#x6BCD;&#xFF0C;&#x62FC;&#x5B8C;&#x5C31;&#x6D88;&#x706D;&#x5B83;&#xFF5C;&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x522B;&#x8BA9;&#x5355;&#x8BCD;&#x843D;&#x5730;&#xFF0C;&#x5148;&#x5F97; 100 &#x5206;</p>
+        <span class="play-btn">PLAY &#x25B6;</span>
+      </div>
+    </a>
+
+    <a class="card" href="games/connect4.html" style="--accent:#ffdd59">
+      <canvas class="demo" id="demoConnect4" width="360" height="150"></canvas>
+      <div class="card-body">
+        <h2>PIXEL CONNECT 4</h2>
+        <p>&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x70B9;&#x51FB;&#x9876;&#x90E8;&#x6295;&#x4E0B;&#x68CB;&#x5B50;&#xFF5C;&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x6A2A;&#x3001;&#x7AD6;&#x3001;&#x659C;&#x4EFB;&#x610F;&#x56DB;&#x4E2A;&#x8FDE;&#x6210;&#x4E00;&#x7EBF;</p>
         <span class="play-btn">PLAY &#x25B6;</span>
       </div>
     </a>
@@ -472,6 +599,402 @@
     requestAnimationFrame(loop);
   })(0);
 })();
+/* ---- demo 7: auto-rally pong ---- */
+(function () {
+  const c = document.getElementById('demoPong');
+  const x = c.getContext('2d');
+  const W = c.width, H = c.height;
+  let ball = { x: W / 2, y: H / 2, vx: 1.8, vy: 1.2 };
+  let p1 = H / 2 - 20, p2 = H / 2 - 20;
+  let t0 = performance.now();
+  (function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    const dt = Math.min(0.033, (now - t0) / 1000); t0 = now;
+    x.fillStyle = '#0d0620'; x.fillRect(0, 0, W, H);
+    x.fillStyle = 'rgba(255,255,255,0.08)';
+    for (let i = 0; i < W; i += 24) x.fillRect(i, H / 2, 12, 1);
+    ball.x += ball.vx * 140 * dt; ball.y += ball.vy * 140 * dt;
+    const t1 = ball.y - 20 + Math.sin(now / 400) * 8;
+    const t2 = ball.y - 20 + Math.cos(now / 500) * 8;
+    p1 += Math.max(-6, Math.min(6, (t1 - p1) * 0.2));
+    p2 += Math.max(-6, Math.min(6, (t2 - p2) * 0.2));
+    if (ball.x < 18 && ball.y > p1 && ball.y < p1 + 40) { ball.vx = Math.abs(ball.vx); ball.x = 18; }
+    if (ball.x > W - 18 && ball.y > p2 && ball.y < p2 + 40) { ball.vx = -Math.abs(ball.vx); ball.x = W - 18; }
+    if (ball.y < 3 || ball.y > H - 3) ball.vy = -ball.vy;
+    if (ball.x < -20 || ball.x > W + 20) { ball = { x: W / 2, y: H / 2, vx: (ball.vx > 0 ? 1 : -1) * 1.8, vy: 1.2 }; }
+    x.fillStyle = '#4de3ff'; x.fillRect(4, p1, 5, 40); x.fillRect(W - 9, p2, 5, 40);
+    x.fillStyle = '#fff'; x.fillRect(ball.x - 3, ball.y - 3, 6, 6);
+    requestAnimationFrame(loop);
+  })(0);
+})();
+/* ---- demo 8: marching invaders ---- */
+(function () {
+  const c = document.getElementById('demoInvaders');
+  const x = c.getContext('2d');
+  const W = c.width, H = c.height;
+  const rows = 3, cols = 6;
+  const COL = ['#ff7ab8', '#b96bff', '#4de3ff'];
+  let dir = 1, off = 0, shot = { x: -99, y: 0, live: false };
+  let t0 = performance.now();
+  (function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    const dt = Math.min(0.033, (now - t0) / 1000); t0 = now;
+    x.fillStyle = '#0d0620'; x.fillRect(0, 0, W, H);
+    off += dir * 26 * dt;
+    if (off > 28 || off < -28) dir = -dir;
+    for (let r = 0; r < rows; r++) for (let j = 0; j < cols; j++) {
+      const cx = 60 + j * 42 + off, cy = 20 + r * 34;
+      const legs = Math.sin(now / 90 + j + r) > 0;
+      x.fillStyle = COL[r];
+      x.fillRect(cx - 9, cy - 5, 18, 12);
+      x.fillRect(cx - 11, cy + 7, 5, legs ? 7 : 4);
+      x.fillRect(cx + 6, cy + 7, 5, legs ? 4 : 7);
+      x.fillStyle = '#fff';
+      x.fillRect(cx - 5, cy - 1, 4, 4);
+      x.fillRect(cx + 2, cy - 1, 4, 4);
+    }
+    if (!shot.live) { shot = { x: 60 + Math.random() * (W - 120), y: 8, live: true }; }
+    shot.y += 110 * dt;
+    x.fillStyle = '#ff4d6d';
+    x.fillRect(shot.x, shot.y, 3, 8);
+    if (shot.y > H) shot.live = false;
+    requestAnimationFrame(loop);
+  })(0);
+})();
+/* ---- demo 9: drifting asteroids ---- */
+(function () {
+  const c = document.getElementById('demoAsteroids');
+  const x = c.getContext('2d');
+  const W = c.width, H = c.height;
+  const rocks = [];
+  for (let i = 0; i < 3; i++) rocks.push({ x: 80 + i * 110, y: 40 + (i % 2) * 60, r: 16 + (i % 2) * 7, a: i * 2, va: 0.5 + i * 0.3, dx: 14 + i * 6, dy: -8 + i * 4 });
+  const ship = { x: 60, y: 105, a: -1.2 };
+  let t0 = performance.now();
+  (function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    const dt = Math.min(0.033, (now - t0) / 1000); t0 = now;
+    x.fillStyle = '#0d0620'; x.fillRect(0, 0, W, H);
+    for (let i = 0; i < rocks.length; i++) {
+      const r = rocks[i];
+      r.x += r.dx * dt; r.y += r.dy * dt; r.a += r.va * dt;
+      if (r.x < -30) r.x = W + 20; if (r.x > W + 30) r.x = -20;
+      if (r.y < -30) r.y = H + 20; if (r.y > H + 30) r.y = -20;
+      x.fillStyle = '#8a8f9e';
+      x.beginPath();
+      for (let k = 0; k <= 9; k++) {
+        const ang = r.a + k / 9 * Math.PI * 2;
+        const rad = r.r * (0.72 + 0.28 * Math.sin(k * 2.7 + r.a * 3));
+        const px = r.x + Math.cos(ang) * rad, py = r.y + Math.sin(ang) * rad;
+        if (k === 0) x.moveTo(px, py); else x.lineTo(px, py);
+      }
+      x.closePath(); x.fill();
+    }
+    ship.a += 0.9 * dt;
+    x.save();
+    x.translate(ship.x, ship.y); x.rotate(ship.a);
+    x.fillStyle = '#4de3ff';
+    x.fillRect(0, -3, 14, 6);
+    x.fillRect(-5, -8, 4, 4); x.fillRect(-5, 4, 4, 4);
+    x.fillStyle = '#ffe94a';
+    x.fillRect(-10, -2, 4, 4);
+    x.restore();
+    requestAnimationFrame(loop);
+  })(0);
+})();
+/* ---- demo 10: maze auto-walker ---- */
+(function () {
+  const c = document.getElementById('demoMaze');
+  const x = c.getContext('2d');
+  const W = c.width, H = c.height;
+  const N = 9, CELL = Math.floor(H / N);
+  const grid = [];
+  for (let i = 0; i < N; i++) { grid.push([]); for (let j = 0; j < N; j++) grid[i].push({ n: 1, s: 1, e: 1, w: 1, v: false }); }
+  const stack = [{ x: 0, y: 0 }];
+  grid[0][0].v = true;
+  const DIRS = [[0, -1, 'n', 's'], [1, 0, 'e', 'w'], [0, 1, 's', 'n'], [-1, 0, 'w', 'e']];
+  while (stack.length) {
+    const cur = stack[stack.length - 1];
+    const options = [];
+    for (let d = 0; d < 4; d++) {
+      const nx = cur.x + DIRS[d][0], ny = cur.y + DIRS[d][1];
+      if (nx >= 0 && ny >= 0 && nx < N && ny < N && !grid[ny][nx].v) options.push(d);
+    }
+    if (!options.length) { stack.pop(); continue; }
+    const d = options[(Math.random() * options.length) | 0];
+    const nx = cur.x + DIRS[d][0], ny = cur.y + DIRS[d][1];
+    grid[cur.y][cur.x][DIRS[d][2]] = 0;
+    grid[ny][nx][DIRS[d][3]] = 0;
+    grid[ny][nx].v = true;
+    stack.push({ x: nx, y: ny });
+  }
+  const prev = {};
+  const q = [{ x: 0, y: 0 }];
+  prev['0,0'] = null;
+  while (q.length) {
+    const cur = q.shift();
+    if (cur.x === N - 1 && cur.y === N - 1) break;
+    for (let d = 0; d < 4; d++) {
+      const nx = cur.x + DIRS[d][0], ny = cur.y + DIRS[d][1];
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+      if (grid[cur.y][cur.x][DIRS[d][2]]) continue;
+      const key = nx + ',' + ny;
+      if (prev[key] !== undefined) continue;
+      prev[key] = cur;
+      q.push({ x: nx, y: ny });
+    }
+  }
+  const path = [];
+  let cur = { x: N - 1, y: N - 1 };
+  while (cur) { path.push(cur); cur = prev[cur.x + ',' + cur.y]; }
+  path.reverse();
+  let pi = 0, px = 4, py = 4, t0 = performance.now();
+  (function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    const dt = Math.min(0.033, (now - t0) / 1000); t0 = now;
+    x.fillStyle = '#0d0620'; x.fillRect(0, 0, W, H);
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+      const g = grid[i][j], ox = j * CELL, oy = i * CELL;
+      x.fillStyle = '#241538';
+      if (g.n) x.fillRect(ox, oy, CELL, 2);
+      if (g.s) x.fillRect(ox, oy + CELL - 2, CELL, 2);
+      if (g.w) x.fillRect(ox, oy, 2, CELL);
+      if (g.e) x.fillRect(ox + CELL - 2, oy, 2, CELL);
+    }
+    x.fillStyle = '#39ff14';
+    x.fillRect((N - 1) * CELL + 4, (N - 1) * CELL + 4, CELL - 8, CELL - 8);
+    if (pi < path.length) {
+      const tx = path[pi].x * CELL + CELL / 2, ty = path[pi].y * CELL + CELL / 2;
+      if (pi === 0) { px = tx; py = ty; }
+      const dx = tx - px, dy = ty - py;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < 4) { pi++; }
+      else { px += dx / d * 70 * dt; py += dy / d * 70 * dt; }
+    } else { pi = 0; }
+    x.fillStyle = '#4de3ff';
+    x.fillRect(px - 5, py - 7, 10, 14);
+    x.fillStyle = '#fff';
+    x.fillRect(px + 1, py - 4, 3, 3);
+    requestAnimationFrame(loop);
+  })(0);
+})();
+/* ---- demo 11: self-playing 2048 ---- */
+(function () {
+  const c = document.getElementById('demo2048');
+  const x = c.getContext('2d');
+  const W = c.width, H = c.height;
+  const N = 4, T = 30, GAP = 6, OFF = (W - (N * T + (N - 1) * GAP)) / 2;
+  const COL = { 0: '#1b1030', 2: '#3b2b5e', 4: '#4b3a74', 8: '#6b4d8f', 16: '#8a5fa8', 32: '#a86a9f', 64: '#c76d8c', 128: '#ffd166', 256: '#ffb03d', 512: '#ff8a3d', 1024: '#ff6b6b', 2048: '#4de3ff' };
+  let grid, slide = 0, dir = 1;
+  function reset() {
+    grid = [];
+    for (let i = 0; i < N; i++) grid.push(new Array(N).fill(0));
+    grid[1][1] = 2; grid[2][2] = 4;
+  }
+  function slideRow(row) {
+    const vals = row.filter(v => v);
+    for (let i = 0; i < vals.length - 1; i++) {
+      if (vals[i] === vals[i + 1]) { vals[i] *= 2; vals.splice(i + 1, 1); }
+    }
+    while (vals.length < N) vals.push(0);
+    return vals;
+  }
+  reset();
+  let t0 = performance.now();
+  (function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    const dt = Math.min(0.033, (now - t0) / 1000); t0 = now;
+    slide += dt;
+    if (slide > 0.8) {
+      slide = 0;
+      const moved = [];
+      for (let i = 0; i < N; i++) {
+        const r = dir === 1 ? grid[i].slice() : grid[i].slice().reverse();
+        const nv = dir === 1 ? slideRow(r) : slideRow(r).reverse();
+        moved.push(nv);
+      }
+      grid = moved;
+      dir = -dir;
+      const empty = [];
+      for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) if (!grid[i][j]) empty.push([i, j]);
+      if (empty.length) {
+        const e = empty[(Math.random() * empty.length) | 0];
+        grid[e[0]][e[1]] = Math.random() < 0.9 ? 2 : 4;
+      }
+    }
+    x.fillStyle = '#0d0620'; x.fillRect(0, 0, W, H);
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+      const v = grid[i][j];
+      x.fillStyle = COL[v] || '#fff';
+      x.fillRect(OFF + j * (T + GAP), OFF + i * (T + GAP), T, T);
+      if (v) {
+        x.fillStyle = v > 64 ? '#0a0618' : '#fff';
+        x.font = 'bold 13px "Courier New", monospace';
+        x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.fillText(String(v), OFF + j * (T + GAP) + T / 2, OFF + i * (T + GAP) + T / 2 + 1);
+      }
+    }
+    requestAnimationFrame(loop);
+  })(0);
+})();
+/* ---- demo 12: memory auto-match ---- */
+(function () {
+  const c = document.getElementById('demoMemory');
+  const x = c.getContext('2d');
+  const W = c.width, H = c.height;
+  const SYMS = [
+    [[0,1,1,1,0],[1,0,0,0,1],[1,0,0,0,1],[1,0,0,0,1],[0,1,1,1,0]],
+    [[1,1,0,1,1],[1,1,1,1,1],[1,1,1,1,1],[0,1,1,1,0],[0,0,1,0,0]],
+    [[0,0,1,0,0],[0,1,1,1,0],[1,1,1,1,1],[0,1,1,1,0],[0,0,1,0,0]],
+    [[0,1,0,0,0],[1,1,0,0,0],[1,1,0,0,0],[1,1,1,0,0],[0,1,1,1,0]]
+  ];
+  const PAL = ['#ff4d6d', '#ffe94a', '#4de3ff', '#b96bff'];
+  const N = 4, CARD = 34, GAP = 8, OFF = (W - (N * CARD + (N - 1) * GAP)) / 2;
+  let ids = [0, 0, 1, 1, 2, 2, 3, 3, 0, 0, 1, 1, 2, 2, 3, 3];
+  for (let i = ids.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; const t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
+  const state = ids.map((id, i) => ({ id, i, flip: 0, matched: false }));
+  let t0 = performance.now();
+  (function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    const dt = Math.min(0.033, (now - t0) / 1000); t0 = now;
+    const t = now / 1000;
+    if (Math.floor(t * 0.8) > Math.floor((t - dt) * 0.8)) {
+      const up = state.filter(s => s.flip);
+      if (up.length === 2) {
+        if (up[0].id === up[1].id) { up[0].matched = true; up[1].matched = true; }
+        else { up[0].flip = 0; up[1].flip = 0; }
+      } else {
+        const down = state.filter(s => !s.flip);
+        if (down.length >= 2) {
+          const a = down[(Math.random() * down.length) | 0];
+          let b = down[(Math.random() * down.length) | 0];
+          while (b === a) b = down[(Math.random() * down.length) | 0];
+          a.flip = 1; b.flip = 1;
+        }
+      }
+    }
+    x.fillStyle = '#0d0620'; x.fillRect(0, 0, W, H);
+    for (let i = 0; i < N * N; i++) {
+      const s = state[i];
+      const ox = OFF + (i % N) * (CARD + GAP), oy = OFF + ((i / N) | 0) * (CARD + GAP);
+      x.fillStyle = s.flip ? (s.matched ? '#3b2b5e' : '#241538') : '#6b4d8f';
+      x.fillRect(ox, oy, CARD, CARD);
+      if (s.flip) {
+        const m = SYMS[s.id];
+        x.fillStyle = PAL[s.id];
+        for (let r = 0; r < 5; r++) for (let k = 0; k < 5; k++) {
+          if (m[r][k]) x.fillRect(ox + 6 + k * 5, oy + 6 + r * 5, 4, 4);
+        }
+      }
+    }
+    requestAnimationFrame(loop);
+  })(0);
+})();
+/* ---- demo 13: minesweeper auto-clear ---- */
+(function () {
+  const c = document.getElementById('demoMines');
+  const x = c.getContext('2d');
+  const W = c.width, H = c.height;
+  const COLS = 12, ROWS = 6, CELL = 17, OX = (W - COLS * CELL) / 2, OY = 40;
+  const NUM = ['', '#4de3ff', '#39ff14', '#ff4d6d', '#b96bff', '#ff9f43', '#4de3ff', '#fff', '#8f8fcf'];
+  let grid = [], order = [], beat = 0;
+  function build() {
+    grid = [];
+    for (let i = 0; i < ROWS; i++) { grid.push([]); for (let j = 0; j < COLS; j++) grid[i].push({ m: Math.random() < 0.12 }); }
+    order = [];
+    const seen = {};
+    const q = [{ x: 5, y: 2 }];
+    seen['5,2'] = true;
+    while (q.length) {
+      const cur = q.shift();
+      order.push(cur);
+      for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+        const nx = cur.x + dj, ny = cur.y + di;
+        const key = nx + ',' + ny;
+        if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS || seen[key]) continue;
+        if (grid[ny][nx].m) continue;
+        seen[key] = true;
+        q.push({ x: nx, y: ny });
+      }
+    }
+    beat = 0;
+  }
+  build();
+  let t0 = performance.now();
+  (function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    const dt = Math.min(0.033, (now - t0) / 1000); t0 = now;
+    beat += dt * 12;
+    if (beat >= order.length + 20) build();
+    x.fillStyle = '#0d0620'; x.fillRect(0, 0, W, H);
+    x.fillStyle = '#8f8fcf';
+    x.font = '700 10px "Courier New", monospace';
+    x.textAlign = 'center';
+    x.fillText('MINESWEEPER', W / 2, 16);
+    for (let i = 0; i < ROWS; i++) for (let j = 0; j < COLS; j++) {
+      const ox = OX + j * CELL, oy = OY + i * CELL;
+      x.fillStyle = '#3b2b5e';
+      x.fillRect(ox, oy, CELL - 1, CELL - 1);
+    }
+    for (let k = 0; k < Math.floor(beat) && k < order.length; k++) {
+      const cur = order[k];
+      const ox = OX + cur.x * CELL, oy = OY + cur.y * CELL;
+      const g = grid[cur.y][cur.x];
+      x.fillStyle = '#241538';
+      x.fillRect(ox, oy, CELL - 1, CELL - 1);
+      if (g.m) { x.fillStyle = '#ff4d6d'; x.fillRect(ox + 4, oy + 4, CELL - 9, CELL - 9); }
+      else {
+        let n = 0;
+        for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+          const ni = cur.y + di, nj = cur.x + dj;
+          if (ni >= 0 && nj >= 0 && ni < ROWS && nj < COLS && grid[ni][nj].m) n++;
+        }
+        if (n) {
+          x.fillStyle = NUM[n];
+          x.font = 'bold 10px "Courier New", monospace';
+          x.textAlign = 'center'; x.textBaseline = 'middle';
+          x.fillText(String(n), ox + CELL / 2, oy + CELL / 2 + 1);
+        }
+      }
+    }
+    requestAnimationFrame(loop);
+  })(0);
+})();
+/* ---- demo 14: dodge falling blocks ---- */
+(function () {
+  const c = document.getElementById('demoDodge');
+  const x = c.getContext('2d');
+  const W = c.width, H = c.height;
+  const PS = 22, PY = H - 34;
+  let px = W / 2 - 11, dir = 1, blocks = [], acc = 0;
+  let t0 = performance.now();
+  (function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    const dt = Math.min(0.033, (now - t0) / 1000); t0 = now;
+    acc += dt;
+    if (acc > 0.5) {
+      acc = 0;
+      blocks.push({ x: Math.random() * (W - 18), y: -18, v: 60 + Math.random() * 60 });
+    }
+    for (let i = 0; i < blocks.length; i++) {
+      blocks[i].y += blocks[i].v * dt;
+      if (blocks[i].y > H + 20) blocks.splice(i--, 1);
+    }
+    px += dir * 120 * dt;
+    if (px < 0 || px > W - PS) { dir = -dir; px = Math.max(0, Math.min(W - PS, px)); }
+    x.fillStyle = '#0d0620'; x.fillRect(0, 0, W, H);
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i];
+      x.fillStyle = '#ff9f43';
+      x.fillRect(b.x, b.y, 18, 18);
+    }
+    x.fillStyle = '#4de3ff';
+    x.fillRect(px, PY, PS, PS);
+    x.fillStyle = '#fff';
+    x.fillRect(px + 14, PY + 4, 4, 4);
+    requestAnimationFrame(loop);
+  })(0);
+})();
 </script>
+<script type="module" src="firebase-init.js"></script>
 </body>
 </html>

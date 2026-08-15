@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Pixel Connect 4 &#x2014; drop discs and line up four against the CPU.">
+<title>Pixel Connect 4 &#x2014; Pixel Game</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0618'/><rect x='2' y='2' width='12' height='12' fill='%23ffdd59'/></svg>">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .stage-wrap { max-width: 384px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="top-bar">
+    <a class="exit-arrow" href="../index.html" title="Back to all games">&#x2190;</a>
+    <h1 class="game-title">PIXEL CONNECT 4</h1>
+    <button class="mute-btn" id="muteBtn">SOUND: ON</button>
+  </div>
+
+  <div class="stage-wrap">
+    <canvas id="game" width="384" height="360"></canvas>
+
+    <div id="startOverlay" class="overlay">
+      <h2>PIXEL CONNECT 4</h2>
+      <p class="ov-sub">&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x70B9;&#x51FB;&#x9876;&#x90E8;&#x6295;&#x4E0B;&#x68CB;&#x5B50;</p>
+      <button class="btn" id="startBtn">START</button>
+      <p class="ov-sub" style="font-size:11px">&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x6A2A;&#x3001;&#x7AD6;&#x3001;&#x659C;&#x4EFB;&#x610F;&#x56DB;&#x4E2A;&#x8FDE;&#x6210;&#x4E00;&#x7EBF;</p>
+    </div>
+
+    <div id="pauseOverlay" class="overlay hidden">
+      <h2>PAUSED</h2>
+      <p class="ov-sub">press P to resume</p>
+    </div>
+
+    <div id="overOverlay" class="overlay hidden">
+      <h2 id="endTitle">YOU WIN!</h2>
+      <p class="ov-sub" id="finalScore">WINS 0</p>
+      <button class="btn" id="restartBtn">PLAY AGAIN</button>
+      <p class="ov-sub" style="font-size:11px">or press ENTER</p>
+    </div>
+  </div>
+
+  <p class="controls-hint">CLICK COLUMN TO DROP &#x00B7; KEYS 1-7 &#x00B7; P PAUSE &#x00B7; M SOUND</p>
+</div>
+
+<script>/* ============================================================
+   PIXEL CONNECT 4 - line up four vs the CPU (vanilla canvas)
+   ============================================================ */
+(function () {
+  'use strict';
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const COLS = 7, ROWS = 6, CELL = 48, OFF = 24, TOP = 48, RAD = 17;
+
+  /* ---------------- audio (tiny WebAudio synth) ---------------- */
+  let actx = null, muted = false;
+  function ensureAudio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function tone(f0, f1, dur, type, vol, delay) {
+    if (muted) return;
+    const ac = ensureAudio(); if (!ac) return;
+    const t0 = ac.currentTime + (delay || 0);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(f0, t0);
+    if (f1) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t0 + dur);
+    g.gain.setValueAtTime(vol || 0.1, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  const sfx = {
+    drop: () => { tone(180, 90, 0.14, 'square', 0.12); tone(90, 60, 0.1, 'triangle', 0.1, 0.02); },
+    win:  () => [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.14, 'square', 0.1, i * 0.14)),
+    lose: () => [400, 300, 200, 140].forEach((f, i) => tone(f, f, 0.16, 'sawtooth', 0.09, i * 0.16))
+  };
+
+  /* ---------------- state ---------------- */
+  let board, anim, turn, over, t = 0, last, started, paused;
+  let wins = Number(localStorage.getItem('pixel-game-connect4-wins') || 0);
+
+  function newBoard() {
+    const b = [];
+    for (let r = 0; r < ROWS; r++) { b.push([]); for (let c = 0; c < COLS; c++) b[r].push(0); }
+    return b;
+  }
+
+  function init() {
+    board = newBoard();
+    anim = null; turn = 1; over = false;
+  }
+
+  function dropAt(c) {
+    for (let r = ROWS - 1; r >= 0; r--) if (!board[r][c]) return r;
+    return -1;
+  }
+
+  function drop(c, pl) {
+    const r = dropAt(c);
+    if (r < 0) return -1;
+    board[r][c] = pl;
+    return r;
+  }
+
+  function checkWin(pl) {
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (board[r][c] !== pl) continue;
+        if (c + 3 < COLS && board[r][c + 1] === pl && board[r][c + 2] === pl && board[r][c + 3] === pl) return true;
+        if (r + 3 < ROWS && board[r + 1][c] === pl && board[r + 2][c] === pl && board[r + 3][c] === pl) return true;
+        if (c + 3 < COLS && r + 3 < ROWS && board[r + 1][c + 1] === pl && board[r + 2][c + 2] === pl && board[r + 3][c + 3] === pl) return true;
+        if (c - 3 >= 0 && r + 3 < ROWS && board[r + 1][c - 1] === pl && board[r + 2][c - 2] === pl && board[r + 3][c - 3] === pl) return true;
+      }
+    }
+    return false;
+  }
+
+  function isFull() {
+    for (let c = 0; c < COLS; c++) if (!board[0][c]) return false;
+    return true;
+  }
+
+  function endGame(pl) {
+    over = true;
+    let title = 'DRAW!';
+    if (pl === 1) {
+      title = 'YOU WIN!';
+      wins++;
+      localStorage.setItem('pixel-game-connect4-wins', String(wins));
+      sfx.win();
+    } else if (pl === 2) {
+      title = 'CPU WINS!';
+      sfx.lose();
+    }
+    document.getElementById('endTitle').textContent = title;
+    document.getElementById('finalScore').textContent = 'WINS ' + wins;
+    document.getElementById('overOverlay').classList.remove('hidden');
+  }
+
+  function cpuMove() {
+    // 1) take a winning drop
+    for (let c = 0; c < COLS; c++) {
+      const r = dropAt(c);
+      if (r < 0) continue;
+      board[r][c] = 2;
+      if (checkWin(2)) { board[r][c] = 0; return c; }
+      board[r][c] = 0;
+    }
+    // 2) block the player
+    for (let c = 0; c < COLS; c++) {
+      const r = dropAt(c);
+      if (r < 0) continue;
+      board[r][c] = 1;
+      if (checkWin(1)) { board[r][c] = 0; return c; }
+      board[r][c] = 0;
+    }
+    // 3) center-biased random
+    const opts = [];
+    for (let c = 0; c < COLS; c++) if (dropAt(c) >= 0) opts.push(c);
+    if (!opts.length) return -1;
+    const weights = opts.map(c => 6 - Math.abs(c - 3) + Math.random() * 2);
+    let sum = 0;
+    weights.forEach(w => { sum += w; });
+    let rnd = Math.random() * sum;
+    for (let i = 0; i < opts.length; i++) {
+      rnd -= weights[i];
+      if (rnd <= 0) return opts[i];
+    }
+    return opts[opts.length - 1];
+  }
+
+  function cpuDrop() {
+    const c = cpuMove();
+    if (c < 0) { endGame(0); return; }
+    const r = drop(c, 2);
+    anim = { c, r, pl: 2, y: TOP - 26 };
+    sfx.drop();
+  }
+
+  function playerDrop(c) {
+    if (anim || turn !== 1 || over) return;
+    const r = drop(c, 1);
+    if (r < 0) return;
+    anim = { c, r, pl: 1, y: TOP - 26 };
+    sfx.drop();
+  }
+
+  function update(dt) {
+    if (!anim) return;
+    anim.y += 1000 * dt;
+    const target = TOP + anim.r * CELL + CELL / 2 - RAD;
+    if (anim.y >= target) {
+      anim.y = target;
+      if (checkWin(anim.pl)) { endGame(anim.pl); }
+      else if (isFull()) { endGame(0); }
+      else {
+        turn = anim.pl === 1 ? 2 : 1;
+        if (turn === 2) cpuDrop();
+      }
+      anim = null;
+    }
+  }  /* ---------------- input ---------------- */
+  canvas.addEventListener('click', (e) => {
+    if (!started || paused || over) return;
+    const r = canvas.getBoundingClientRect();
+    const mx = (e.clientX - r.left) * (W / r.width) - OFF;
+    const c = Math.floor(mx / CELL);
+    if (c >= 0 && c < COLS) playerDrop(c);
+  });
+
+  const keys = {};
+  document.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (e.repeat) return;
+    keys[k] = true;
+    if (k === 'p') togglePause();
+    if (k === 'm') toggleMute();
+    if (k === 'enter' && !started) startGame();
+    if (k === 'enter' && over) rematch();
+    if (started && !paused && !over && k >= '1' && k <= '7') playerDrop(Number(k) - 1);
+  });
+  document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+  window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+  function toggleMute() {
+    muted = !muted;
+    document.getElementById('muteBtn').textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
+  }
+  function togglePause() {
+    if (!started || over) return;
+    paused = !paused;
+    document.getElementById('pauseOverlay').classList.toggle('hidden', !paused);
+  }
+  function startGame() {
+    if (started) return;
+    started = true;
+    init();
+    document.getElementById('startOverlay').classList.add('hidden');
+  }
+  function rematch() {
+    document.getElementById('overOverlay').classList.add('hidden');
+    init();
+    started = true;
+  }
+  document.getElementById('startBtn').addEventListener('click', startGame);
+  document.getElementById('restartBtn').addEventListener('click', rematch);
+  document.getElementById('muteBtn').addEventListener('click', toggleMute);
+
+  /* ---------------- drawing ---------------- */
+  function draw() {
+    ctx.fillStyle = '#0a0618';
+    ctx.fillRect(0, 0, W, H);
+    // drop zone hint
+    if (turn === 1 && !anim && !over) {
+      const pulse = 0.4 + 0.4 * Math.abs(Math.sin(t * 5));
+      ctx.fillStyle = 'rgba(77,227,255,' + pulse.toFixed(2) + ')';
+      ctx.fillRect(OFF, 6, COLS * CELL, 6);
+    }
+    // wells
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const x = OFF + c * CELL + 4, y = TOP + r * CELL + 4;
+        ctx.fillStyle = '#1b1030';
+        ctx.fillRect(x, y, CELL - 8, CELL - 8);
+      }
+    }
+    // discs
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (!board[r][c]) continue;
+        const x = OFF + c * CELL + CELL / 2;
+        const y = TOP + r * CELL + CELL / 2;
+        ctx.fillStyle = board[r][c] === 1 ? '#4de3ff' : '#ff4d6d';
+        ctx.fillRect(x - RAD, y - RAD, RAD * 2, RAD * 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.fillRect(x - RAD, y - RAD, RAD * 2, 6);
+      }
+    }
+    // falling disc
+    if (anim) {
+      const x = OFF + anim.c * CELL + CELL / 2;
+      ctx.fillStyle = anim.pl === 1 ? '#4de3ff' : '#ff4d6d';
+      ctx.fillRect(x - RAD, anim.y - RAD, RAD * 2, RAD * 2);
+    }
+    // HUD
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 14px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('YOU', 8, TOP - 12);
+    ctx.fillStyle = '#4de3ff';
+    ctx.fillRect(48, TOP - 20, 12, 12);
+    ctx.fillStyle = '#fff';
+    ctx.fillText('CPU', 74, TOP - 12);
+    ctx.fillStyle = '#ff4d6d';
+    ctx.fillRect(114, TOP - 20, 12, 12);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ffdd59';
+    ctx.fillText('WINS ' + wins, W - 8, TOP - 12);
+  }
+
+  /* ---------------- main loop ---------------- */
+  function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    if (typeof last !== 'number' || !isFinite(last)) last = now;
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    t += dt;
+    if (started && !paused && !over) update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  init();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

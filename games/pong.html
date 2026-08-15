@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Pixel Pong &#x2014; the classic table tennis duel. First to 7 points wins.">
+<title>Pixel Pong &#x2014; Pixel Game</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0618'/><rect x='2' y='2' width='12' height='12' fill='%234de3ff'/></svg>">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .stage-wrap { max-width: 480px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="top-bar">
+    <a class="exit-arrow" href="../index.html" title="Back to all games">&#x2190;</a>
+    <h1 class="game-title">PIXEL PONG</h1>
+    <button class="mute-btn" id="muteBtn">SOUND: ON</button>
+  </div>
+
+  <div class="stage-wrap">
+    <canvas id="game" width="480" height="360"></canvas>
+
+    <div id="startOverlay" class="overlay">
+      <h2>PIXEL PONG</h2>
+      <p class="ov-sub">&#x600E;&#x4E48;&#x73A9;&#xFF1A;W/S &#x6216; &#x2191;/&#x2193; &#x79FB;&#x52A8;&#x5DE6;&#x6321;&#x677F;</p>
+      <button class="btn" id="startBtn">START</button>
+      <p class="ov-sub" style="font-size:11px">&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x5148;&#x5F97; 7 &#x5206;&#xFF0C;&#x6321;&#x56DE;&#x5BF9;&#x65B9;&#x7684;&#x7403;</p>
+    </div>
+
+    <div id="pauseOverlay" class="overlay hidden">
+      <h2>PAUSED</h2>
+      <p class="ov-sub">press P to resume</p>
+    </div>
+
+    <div id="overOverlay" class="overlay hidden">
+      <h2 id="endTitle">GAME OVER</h2>
+      <p class="ov-sub" id="finalScore">SCORE 0 - 0</p>
+      <button class="btn" id="restartBtn">PLAY AGAIN</button>
+    </div>
+  </div>
+
+  <p class="controls-hint">W/S OR &#x2191;/&#x2193; MOVE &#x00B7; P PAUSE &#x00B7; M SOUND &#x00B7; FIRST TO 7 WINS</p>
+</div>
+
+<script>/* ============================================================
+   PIXEL PONG - classic table tennis duel, first to 7 (vanilla)
+   ============================================================ */
+(function () {
+  'use strict';
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const PW = 12, PH = 64, MG = 18, BR = 7, WIN = 7;
+  const P_SPEED = 330, C_SPEED = 250, B_SPEED = 310, B_MAX = 620;
+
+  /* ---------------- audio (tiny WebAudio synth) ---------------- */
+  let actx = null, muted = false;
+  function ensureAudio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function tone(f0, f1, dur, type, vol, delay) {
+    if (muted) return;
+    const ac = ensureAudio(); if (!ac) return;
+    const t0 = ac.currentTime + (delay || 0);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(f0, t0);
+    if (f1) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t0 + dur);
+    g.gain.setValueAtTime(vol || 0.1, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  const sfx = {
+    hit:   () => tone(340, 200, 0.07, 'square', 0.09),
+    wall:  () => tone(240, 180, 0.05, 'triangle', 0.05),
+    score: () => { tone(150, 80, 0.2, 'sawtooth', 0.13); tone(90, 50, 0.16, 'square', 0.09, 0.02); },
+    win:   () => [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.14, 'square', 0.1, i * 0.14)),
+    lose:  () => [400, 300, 200, 140].forEach((f, i) => tone(f, f, 0.16, 'sawtooth', 0.09, i * 0.16))
+  };
+
+  /* ---------------- state ---------------- */
+  let py, cy, bx, by, bvx, bvy, sp, sc, best, over, t = 0, last, started, paused;
+  best = Number(localStorage.getItem('pixel-game-pong-best') || 0);
+
+  function saveBest() {
+    if (sp > best) { best = sp; localStorage.setItem('pixel-game-pong-best', String(best)); }
+  }
+
+  function serve(dir) {
+    bx = W / 2; by = H / 2;
+    const a = (Math.random() - 0.5) * 0.7;
+    bvx = Math.cos(a) * B_SPEED * dir;
+    bvy = Math.sin(a) * B_SPEED;
+  }
+
+  function init() {
+    py = H / 2 - PH / 2; cy = py;
+    sp = 0; sc = 0; over = false;
+    serve(Math.random() < 0.5 ? 1 : -1);
+  }
+
+  function scorePoint(who) {
+    if (who === 'p') sp++; else sc++;
+    sfx.score();
+    if (sp >= WIN || sc >= WIN) {
+      over = true;
+      saveBest();
+      document.getElementById('endTitle').textContent = sp >= WIN ? 'YOU WIN!' : 'CPU WINS!';
+      document.getElementById('finalScore').textContent = 'SCORE ' + sp + ' - ' + sc + '  BEST ' + best;
+      document.getElementById('overOverlay').classList.remove('hidden');
+      if (sp >= WIN) sfx.win(); else sfx.lose();
+    } else {
+      serve(who === 'p' ? 1 : -1);
+    }
+  }
+
+  /* ---------------- input ---------------- */
+  const keys = {};
+  document.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (['arrowup', 'arrowdown', ' '].includes(k)) e.preventDefault();
+    if (e.repeat) return;
+    keys[k] = true;
+    if (k === 'p') togglePause();
+    if (k === 'm') toggleMute();
+    if (k === 'enter' && !started) startGame();
+    if (k === 'enter' && over) rematch();
+  });
+  document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+  window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+  function toggleMute() {
+    muted = !muted;
+    document.getElementById('muteBtn').textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
+  }
+
+  function togglePause() {
+    if (!started || over) return;
+    paused = !paused;
+    document.getElementById('pauseOverlay').classList.toggle('hidden', !paused);
+  }
+
+  function startGame() {
+    if (started) return;
+    started = true;
+    init();
+    document.getElementById('startOverlay').classList.add('hidden');
+    sfx.wall();
+  }
+
+  function rematch() {
+    document.getElementById('overOverlay').classList.add('hidden');
+    init();
+    started = true;
+  }
+
+  document.getElementById('startBtn').addEventListener('click', startGame);
+  document.getElementById('restartBtn').addEventListener('click', rematch);
+  document.getElementById('muteBtn').addEventListener('click', toggleMute);
+
+  /* ---------------- update ---------------- */
+  function update(dt) {
+    let mv = 0;
+    if (keys.w || keys.arrowup) mv -= 1;
+    if (keys.s || keys.arrowdown) mv += 1;
+    py += mv * P_SPEED * dt;
+    py = Math.max(0, Math.min(H - PH, py));
+
+    // CPU tracks the ball with a little wobble so it is beatable
+    const wob = Math.sin(t * 3) * 18;
+    const dy = (by - PH / 2 + wob) - cy;
+    cy += Math.sign(dy) * Math.min(Math.abs(dy), C_SPEED * dt);
+    cy = Math.max(0, Math.min(H - PH, cy));
+
+    bx += bvx * dt; by += bvy * dt;
+    if (by < BR && bvy < 0) { by = BR; bvy = -bvy; sfx.wall(); }
+    if (by > H - BR && bvy > 0) { by = H - BR; bvy = -bvy; sfx.wall(); }
+
+    // paddle hits - bounce angle depends on where the ball meets the paddle
+    if (bvx < 0 && bx - BR < MG + PW && bx + BR > MG && by > py - BR && by < py + PH + BR) {
+      const off = (by - (py + PH / 2)) / (PH / 2);
+      const spd = Math.min(B_MAX, Math.hypot(bvx, bvy) * 1.05);
+      const a = off * 1.05;
+      bvx = Math.cos(a) * spd; bvy = Math.sin(a) * spd;
+      bx = MG + PW + BR;
+      sfx.hit();
+    }
+    if (bvx > 0 && bx + BR > W - MG - PW && bx - BR < W - MG && by > cy - BR && by < cy + PH + BR) {
+      const off = (by - (cy + PH / 2)) / (PH / 2);
+      const spd = Math.min(B_MAX, Math.hypot(bvx, bvy) * 1.05);
+      const a = Math.PI - off * 1.05;
+      bvx = Math.cos(a) * spd; bvy = Math.sin(a) * spd;
+      bx = W - MG - PW - BR;
+      sfx.hit();
+    }
+
+    if (bx < -20) scorePoint('c');
+    if (bx > W + 20) scorePoint('p');
+  }  /* ---------------- drawing ---------------- */
+  function draw() {
+    ctx.fillStyle = '#0a0618';
+    ctx.fillRect(0, 0, W, H);
+    // center line
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    for (let y = 0; y < H; y += 24) ctx.fillRect(W / 2 - 2, y, 4, 12);
+    // paddles
+    ctx.fillStyle = '#4de3ff';
+    ctx.fillRect(MG, py, PW, PH);
+    ctx.fillStyle = '#ff4d6d';
+    ctx.fillRect(W - MG - PW, cy, PW, PH);
+    // ball
+    ctx.fillStyle = '#ffe94a';
+    ctx.fillRect(bx - BR / 2, by - BR / 2, BR, BR);
+    // score
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 22px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(sp, W / 2 - 44, 34);
+    ctx.fillText(sc, W / 2 + 44, 34);
+  }
+
+  /* ---------------- main loop ---------------- */
+  function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    if (typeof last !== 'number' || !isFinite(last)) last = now;
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    t += dt;
+    if (started && !paused && !over) update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  init();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

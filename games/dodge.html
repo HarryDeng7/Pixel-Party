@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Pixel Dodge &#x2014; weave through the falling blocks for 60 seconds.">
+<title>Pixel Dodge &#x2014; Pixel Game</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0618'/><rect x='2' y='2' width='12' height='12' fill='%23ff9f43'/></svg>">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .stage-wrap { max-width: 360px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="top-bar">
+    <a class="exit-arrow" href="../index.html" title="Back to all games">&#x2190;</a>
+    <h1 class="game-title">PIXEL DODGE</h1>
+    <button class="mute-btn" id="muteBtn">SOUND: ON</button>
+  </div>
+
+  <div class="stage-wrap">
+    <canvas id="game" width="360" height="480"></canvas>
+
+    <div id="startOverlay" class="overlay">
+      <h2>PIXEL DODGE</h2>
+      <p class="ov-sub">&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x2190;&#x2192; &#x5DE6;&#x53F3;&#x79FB;&#x52A8;&#xFF0C;&#x8EB2;&#x5F00;&#x6389;&#x843D;&#x65B9;&#x5757;</p>
+      <button class="btn" id="startBtn">START</button>
+      <p class="ov-sub" style="font-size:11px">&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x575A;&#x6301; 60 &#x79D2;&#xFF0C;&#x5206;&#x6570;&#x8D8A;&#x9AD8;&#x8D8A;&#x597D;</p>
+    </div>
+
+    <div id="pauseOverlay" class="overlay hidden">
+      <h2>PAUSED</h2>
+      <p class="ov-sub">press P to resume</p>
+    </div>
+
+    <div id="overOverlay" class="overlay hidden">
+      <h2 id="endTitle">GAME OVER</h2>
+      <p class="ov-sub" id="finalScore">TIME 0s &#x00B7; BEST 0s</p>
+      <button class="btn" id="restartBtn">PLAY AGAIN</button>
+      <p class="ov-sub" style="font-size:11px">or press ENTER</p>
+    </div>
+  </div>
+
+  <p class="controls-hint">&#x2190;&#x2192; / A D MOVE &#x00B7; P PAUSE &#x00B7; M SOUND</p>
+</div>
+
+<script>/* ============================================================
+   PIXEL DODGE - survive 60 seconds of falling blocks (vanilla)
+   ============================================================ */
+(function () {
+  'use strict';
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const PS = 26, PY = H - 52, P_SPEED = 320;
+  const TARGET = 60;
+
+  /* ---------------- audio (tiny WebAudio synth) ---------------- */
+  let actx = null, muted = false;
+  function ensureAudio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function tone(f0, f1, dur, type, vol, delay) {
+    if (muted) return;
+    const ac = ensureAudio(); if (!ac) return;
+    const t0 = ac.currentTime + (delay || 0);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(f0, t0);
+    if (f1) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t0 + dur);
+    g.gain.setValueAtTime(vol || 0.1, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  const sfx = {
+    hit:  () => { tone(300, 50, 0.3, 'sawtooth', 0.15); tone(150, 40, 0.25, 'square', 0.1, 0.04); },
+    tick: () => tone(700, 700, 0.05, 'square', 0.05),
+    win:  () => [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.14, 'square', 0.1, i * 0.14)),
+    lose: () => [400, 300, 200, 140].forEach((f, i) => tone(f, f, 0.16, 'sawtooth', 0.09, i * 0.16))
+  };
+
+  /* ---------------- state ---------------- */
+  let px, blocks, lives, time2, spawnT, invT, over, t = 0, last, started, paused;
+  let best = Number(localStorage.getItem('pixel-game-dodge-best') || 0);
+
+  function init() {
+    px = W / 2 - PS / 2;
+    blocks = [];
+    lives = 3; time2 = 0; spawnT = 0.6; invT = 0; over = false;
+  }
+
+  function endGame(won) {
+    over = true;
+    const s = Math.floor(time2);
+    if (s > best) { best = s; localStorage.setItem('pixel-game-dodge-best', String(best)); }
+    document.getElementById('endTitle').textContent = won ? 'YOU WIN!' : 'GAME OVER';
+    document.getElementById('finalScore').textContent = 'TIME ' + s + 's  BEST ' + best + 's';
+    document.getElementById('overOverlay').classList.remove('hidden');
+    if (won) sfx.win(); else sfx.lose();
+  }
+
+  /* ---------------- input ---------------- */
+  const keys = {};
+  document.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (['arrowleft', 'arrowright'].includes(k)) e.preventDefault();
+    if (e.repeat) return;
+    keys[k] = true;
+    if (k === 'p') togglePause();
+    if (k === 'm') toggleMute();
+    if (k === 'enter' && !started) startGame();
+    if (k === 'enter' && over) rematch();
+  });
+  document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+  window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+  function toggleMute() {
+    muted = !muted;
+    document.getElementById('muteBtn').textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
+  }
+  function togglePause() {
+    if (!started || over) return;
+    paused = !paused;
+    document.getElementById('pauseOverlay').classList.toggle('hidden', !paused);
+  }
+  function startGame() {
+    if (started) return;
+    started = true;
+    init();
+    document.getElementById('startOverlay').classList.add('hidden');
+  }
+  function rematch() {
+    document.getElementById('overOverlay').classList.add('hidden');
+    init();
+    started = true;
+  }
+  document.getElementById('startBtn').addEventListener('click', startGame);
+  document.getElementById('restartBtn').addEventListener('click', rematch);
+  document.getElementById('muteBtn').addEventListener('click', toggleMute);
+
+  /* ---------------- update ---------------- */
+  function update(dt) {
+    time2 += dt;
+    invT -= dt;
+    const s = Math.floor(time2);
+    if (s >= TARGET) { endGame(true); return; }
+
+    // player
+    let mv = 0;
+    if (keys.arrowleft || keys.a) mv -= 1;
+    if (keys.arrowright || keys.d) mv += 1;
+    px += mv * P_SPEED * dt;
+    px = Math.max(0, Math.min(W - PS, px));
+
+    // spawn blocks, faster over time
+    spawnT -= dt;
+    if (spawnT <= 0) {
+      spawnT = Math.max(0.28, 0.55 - time2 * 0.006);
+      const w = 18 + Math.random() * 26;
+      blocks.push({
+        x: Math.random() * (W - w),
+        y: -20,
+        w, h: 16 + Math.random() * 8,
+        v: 150 + time2 * 4.5 + Math.random() * 40
+      });
+    }
+    for (let i = blocks.length - 1; i >= 0; i--) {
+      const b = blocks[i];
+      b.y += b.v * dt;
+      if (b.y > H + 20) { blocks.splice(i, 1); continue; }
+      if (invT <= 0 &&
+          b.x < px + PS && b.x + b.w > px &&
+          b.y < PY + PS && b.y + b.h > PY) {
+        blocks.splice(i, 1);
+        lives--;
+        invT = 1.2;
+        sfx.hit();
+        if (lives <= 0) { endGame(false); return; }
+      }
+    }
+    // heartbeat tick each second
+    if (s !== Math.floor(time2 - dt)) sfx.tick();
+  }  /* ---------------- drawing ---------------- */
+  function draw() {
+    ctx.fillStyle = '#0a0618';
+    ctx.fillRect(0, 0, W, H);
+    // danger zone line
+    ctx.fillStyle = 'rgba(255,159,67,0.15)';
+    ctx.fillRect(0, PY - 30, W, 4);
+    // blocks
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i];
+      ctx.fillStyle = '#ff9f43';
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillRect(b.x, b.y, b.w, 4);
+    }
+    // player (blink while invulnerable)
+    if (invT <= 0 || Math.sin(t * 18) > -0.2) {
+      ctx.fillStyle = '#4de3ff';
+      ctx.fillRect(px, PY, PS, PS);
+      ctx.fillStyle = '#0a0618';
+      ctx.fillRect(px + 6, PY + 7, 4, 6);
+      ctx.fillRect(px + 16, PY + 7, 4, 6);
+    }
+    // HUD
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 15px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('TIME ' + Math.floor(time2) + 's', 8, 24);
+    ctx.textAlign = 'right';
+    ctx.fillText('BEST ' + best + 's', W - 8, 24);
+    // hearts
+    for (let i = 0; i < lives; i++) {
+      ctx.fillStyle = '#ff4d6d';
+      ctx.fillRect(8 + i * 20, H - 22, 14, 12);
+      ctx.fillRect(8 + i * 20 + 4, H - 26, 6, 6);
+    }
+    // goal progress bar
+    const frac = Math.min(1, time2 / TARGET);
+    ctx.fillStyle = '#241538';
+    ctx.fillRect(0, H - 6, W, 6);
+    ctx.fillStyle = '#39ff14';
+    ctx.fillRect(0, H - 6, W * frac, 6);
+  }
+
+  /* ---------------- main loop ---------------- */
+  function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    if (typeof last !== 'number' || !isFinite(last)) last = now;
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    t += dt;
+    if (started && !paused && !over) update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  init();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

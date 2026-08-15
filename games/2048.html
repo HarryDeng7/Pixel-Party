@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Pixel 2048 &#x2014; merge matching tiles and reach 2048.">
+<title>Pixel 2048 &#x2014; Pixel Game</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0618'/><rect x='2' y='2' width='12' height='12' fill='%23ffd166'/></svg>">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .stage-wrap { max-width: 400px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="top-bar">
+    <a class="exit-arrow" href="../index.html" title="Back to all games">&#x2190;</a>
+    <h1 class="game-title">PIXEL 2048</h1>
+    <button class="mute-btn" id="muteBtn">SOUND: ON</button>
+  </div>
+
+  <div class="stage-wrap">
+    <canvas id="game" width="400" height="400"></canvas>
+
+    <div id="startOverlay" class="overlay">
+      <h2>PIXEL 2048</h2>
+      <p class="ov-sub">&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x65B9;&#x5411;&#x952E; / WASD &#x6ED1;&#x52A8;&#x65B9;&#x5757;</p>
+      <button class="btn" id="startBtn">START</button>
+      <p class="ov-sub" style="font-size:11px">&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x76F8;&#x540C;&#x6570;&#x5B57;&#x5408;&#x5E76;&#x7FFB;&#x500D;&#xFF0C;&#x51D1;&#x51FA; 2048</p>
+    </div>
+
+    <div id="pauseOverlay" class="overlay hidden">
+      <h2>PAUSED</h2>
+      <p class="ov-sub">press P to resume</p>
+    </div>
+
+    <div id="overOverlay" class="overlay hidden">
+      <h2 id="endTitle">YOU WIN!</h2>
+      <p class="ov-sub" id="finalScore">SCORE 0 &#x00B7; BEST 0</p>
+      <button class="btn" id="restartBtn">PLAY AGAIN</button>
+      <p class="ov-sub" style="font-size:11px">or press ENTER</p>
+    </div>
+  </div>
+
+  <p class="controls-hint">ARROWS / WASD SLIDE &#x00B7; P PAUSE &#x00B7; M SOUND</p>
+</div>
+
+<script>/* ============================================================
+   PIXEL 2048 - merge tiles up to 2048 (vanilla canvas)
+   ============================================================ */
+(function () {
+  'use strict';
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const TILE = 88, GAP = 10, OFF = 9, N = 4;
+
+  /* ---------------- audio (tiny WebAudio synth) ---------------- */
+  let actx = null, muted = false;
+  function ensureAudio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function tone(f0, f1, dur, type, vol, delay) {
+    if (muted) return;
+    const ac = ensureAudio(); if (!ac) return;
+    const t0 = ac.currentTime + (delay || 0);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(f0, t0);
+    if (f1) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t0 + dur);
+    g.gain.setValueAtTime(vol || 0.1, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  const sfx = {
+    slide: () => tone(220, 260, 0.05, 'square', 0.04),
+    merge: () => { tone(330, 220, 0.08, 'square', 0.09); tone(440, 300, 0.08, 'triangle', 0.07, 0.04); },
+    win:   () => [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.14, 'square', 0.1, i * 0.14)),
+    lose:  () => [400, 300, 200, 140].forEach((f, i) => tone(f, f, 0.16, 'sawtooth', 0.09, i * 0.16))
+  };
+
+  /* ---------------- state ---------------- */
+  let grid, score, best, over, won, t = 0, last, started, paused;
+  best = Number(localStorage.getItem('pixel-game-2048-best') || 0);
+
+  const COLORS = {
+    0: '#1b1030', 2: '#3b2b5e', 4: '#4b3a74', 8: '#6b4d8f', 16: '#8a5fa8',
+    32: '#a86a9f', 64: '#c76d8c', 128: '#ffd166', 256: '#ffb03d', 512: '#ff8a3d',
+    1024: '#ff6b6b', 2048: '#4de3ff'
+  };
+
+  function newGrid() {
+    return [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+  }
+
+  function spawn() {
+    const empty = [];
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (grid[y][x] === 0) empty.push([x, y]);
+    if (!empty.length) return;
+    const c = empty[Math.floor(Math.random() * empty.length)];
+    grid[c[1]][c[0]] = Math.random() < 0.9 ? 2 : 4;
+  }
+
+  function init() {
+    grid = newGrid();
+    score = 0; over = false; won = false;
+    spawn(); spawn();
+  }
+
+  function canMove() {
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        if (grid[y][x] === 0) return true;
+        if (x < N - 1 && grid[y][x] === grid[y][x + 1]) return true;
+        if (y < N - 1 && grid[y][x] === grid[y + 1][x]) return true;
+      }
+    }
+    return false;
+  }
+
+  function slideLine(line) {
+    const vals = line.filter(v => v !== 0);
+    const out = [];
+    let gained = 0;
+    for (let i = 0; i < vals.length; i++) {
+      if (i + 1 < vals.length && vals[i] === vals[i + 1]) {
+        out.push(vals[i] * 2);
+        gained += vals[i] * 2;
+        i++;
+      } else {
+        out.push(vals[i]);
+      }
+    }
+    while (out.length < N) out.push(0);
+    return { out, gained };
+  }
+
+  function move(d) {
+    let moved = false, gained = 0;
+    for (let i = 0; i < N; i++) {
+      const line = [];
+      for (let j = 0; j < N; j++) {
+        if (d === 'left') line.push(grid[i][j]);
+        if (d === 'right') line.push(grid[i][N - 1 - j]);
+        if (d === 'up') line.push(grid[j][i]);
+        if (d === 'down') line.push(grid[N - 1 - j][i]);
+      }
+      const r = slideLine(line);
+      gained += r.gained;
+      if (r.out.join(',') !== line.join(',')) moved = true;
+      for (let j = 0; j < N; j++) {
+        if (d === 'left') grid[i][j] = r.out[j];
+        if (d === 'right') grid[i][N - 1 - j] = r.out[j];
+        if (d === 'up') grid[j][i] = r.out[j];
+        if (d === 'down') grid[N - 1 - j][i] = r.out[j];
+      }
+    }
+    if (!moved) return;
+    score += gained;
+    if (gained > 0) sfx.merge(); else sfx.slide();
+    if (score > best) { best = score; localStorage.setItem('pixel-game-2048-best', String(best)); }
+    spawn();
+    // win / lose checks
+    for (let y = 0; y < N && !won; y++) for (let x = 0; x < N; x++) if (grid[y][x] >= 2048) won = true;
+    if (won && !over) {
+      over = true;
+      document.getElementById('endTitle').textContent = 'YOU WIN!';
+      document.getElementById('finalScore').textContent = 'SCORE ' + score + '  BEST ' + best;
+      document.getElementById('overOverlay').classList.remove('hidden');
+      sfx.win();
+    } else if (!canMove() && !over) {
+      over = true;
+      document.getElementById('endTitle').textContent = 'GAME OVER';
+      document.getElementById('finalScore').textContent = 'SCORE ' + score + '  BEST ' + best;
+      document.getElementById('overOverlay').classList.remove('hidden');
+      sfx.lose();
+    }
+  }
+
+  /* ---------------- input ---------------- */
+  const keys = {};
+  document.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown'].includes(k)) e.preventDefault();
+    if (e.repeat) return;
+    keys[k] = true;
+    if (k === 'p') togglePause();
+    if (k === 'm') toggleMute();
+    if (k === 'enter' && !started) startGame();
+    if (k === 'enter' && over) rematch();
+    if (started && !paused && !over) {
+      if (k === 'arrowleft' || k === 'a') move('left');
+      if (k === 'arrowright' || k === 'd') move('right');
+      if (k === 'arrowup' || k === 'w') move('up');
+      if (k === 'arrowdown' || k === 's') move('down');
+    }
+  });
+  document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+  window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+  function toggleMute() {
+    muted = !muted;
+    document.getElementById('muteBtn').textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
+  }
+  function togglePause() {
+    if (!started || over) return;
+    paused = !paused;
+    document.getElementById('pauseOverlay').classList.toggle('hidden', !paused);
+  }
+  function startGame() {
+    if (started) return;
+    started = true;
+    init();
+    document.getElementById('startOverlay').classList.add('hidden');
+  }
+  function rematch() {
+    document.getElementById('overOverlay').classList.add('hidden');
+    init();
+    started = true;
+  }
+  document.getElementById('startBtn').addEventListener('click', startGame);
+  document.getElementById('restartBtn').addEventListener('click', rematch);
+  document.getElementById('muteBtn').addEventListener('click', toggleMute);  /* ---------------- drawing ---------------- */
+  function draw() {
+    ctx.fillStyle = '#0a0618';
+    ctx.fillRect(0, 0, W, H);
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const v = grid[y][x];
+        const px = OFF + x * (TILE + GAP), py = OFF + y * (TILE + GAP);
+        ctx.fillStyle = COLORS[v] || '#ff6b6b';
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fillRect(px, py, TILE, 5);
+        if (v) {
+          ctx.fillStyle = v >= 128 ? '#0a0618' : '#fff';
+          ctx.font = '800 ' + (v >= 1024 ? 26 : v >= 128 ? 30 : 36) + 'px "Courier New", monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(v), px + TILE / 2, py + TILE / 2 + 2);
+          ctx.textBaseline = 'alphabetic';
+        }
+      }
+    }
+    // HUD
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 14px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('SCORE ' + score, 8, 20);
+    ctx.textAlign = 'right';
+    ctx.fillText('BEST ' + best, W - 8, 20);
+  }
+
+  /* ---------------- main loop ---------------- */
+  function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    if (typeof last !== 'number' || !isFinite(last)) last = now;
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    t += dt;
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  init();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

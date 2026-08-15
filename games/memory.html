@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Pixel Memory &#x2014; flip cards and match all eight pairs.">
+<title>Pixel Memory &#x2014; Pixel Game</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0618'/><rect x='2' y='2' width='12' height='12' fill='%23c084fc'/></svg>">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .stage-wrap { max-width: 400px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="top-bar">
+    <a class="exit-arrow" href="../index.html" title="Back to all games">&#x2190;</a>
+    <h1 class="game-title">PIXEL MEMORY</h1>
+    <button class="mute-btn" id="muteBtn">SOUND: ON</button>
+  </div>
+
+  <div class="stage-wrap">
+    <canvas id="game" width="400" height="400"></canvas>
+
+    <div id="startOverlay" class="overlay">
+      <h2>PIXEL MEMORY</h2>
+      <p class="ov-sub">&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x70B9;&#x51FB;&#x7FFB;&#x5F00;&#x5361;&#x7247;&#xFF0C;&#x8BB0;&#x4F4F;&#x56FE;&#x6848;</p>
+      <button class="btn" id="startBtn">START</button>
+      <p class="ov-sub" style="font-size:11px">&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x5168;&#x90E8;&#x914D;&#x5BF9;&#x6210;&#x529F;&#xFF0C;&#x6B65;&#x6570;&#x8D8A;&#x5C11;&#x8D8A;&#x597D;</p>
+    </div>
+
+    <div id="pauseOverlay" class="overlay hidden">
+      <h2>PAUSED</h2>
+      <p class="ov-sub">press P to resume</p>
+    </div>
+
+    <div id="overOverlay" class="overlay hidden">
+      <h2 id="endTitle">YOU WIN!</h2>
+      <p class="ov-sub" id="finalScore">MOVES 0 &#x00B7; BEST 0</p>
+      <button class="btn" id="restartBtn">PLAY AGAIN</button>
+      <p class="ov-sub" style="font-size:11px">or press ENTER</p>
+    </div>
+  </div>
+
+  <p class="controls-hint">CLICK TO FLIP &#x00B7; P PAUSE &#x00B7; M SOUND</p>
+</div>
+
+<script>/* ============================================================
+   PIXEL MEMORY - match 8 pixel pairs (vanilla canvas)
+   ============================================================ */
+(function () {
+  'use strict';
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const CARD = 82, GAP = 8, OFF = 24, N = 4;
+
+  /* ---------------- audio (tiny WebAudio synth) ---------------- */
+  let actx = null, muted = false;
+  function ensureAudio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function tone(f0, f1, dur, type, vol, delay) {
+    if (muted) return;
+    const ac = ensureAudio(); if (!ac) return;
+    const t0 = ac.currentTime + (delay || 0);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(f0, t0);
+    if (f1) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t0 + dur);
+    g.gain.setValueAtTime(vol || 0.1, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  const sfx = {
+    flip:  () => tone(300, 400, 0.06, 'square', 0.06),
+    match: () => { tone(440, 440, 0.09, 'square', 0.1); tone(660, 660, 0.12, 'square', 0.1, 0.09); },
+    wrong: () => tone(160, 120, 0.12, 'sawtooth', 0.07),
+    win:   () => [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.14, 'square', 0.1, i * 0.14))
+  };
+
+  /* ---------------- state ---------------- */
+  const SYMS = [
+    ['.XXX.', 'XX.XX', 'XX.XX', '.X.X.', '..X..'],
+    ['..X..', '..X..', 'XXXXX', '.X.X.', 'X...X'],
+    ['..X..', '.XXX.', 'XXXXX', '.XXX.', '..X..'],
+    ['.XXXX', 'XX...', 'XXXX.', 'XXXXX', '..XXX'],
+    ['.XXX.', 'X...X', 'X.X.X', 'X...X', '.XXX.'],
+    ['..X..', '..X..', 'XXXXX', '..X..', '..X..'],
+    ['X...X', '.X.X.', '..X..', '.X.X.', 'X...X'],
+    ['....X', '....X', '.X..X', '.X.X.', '..XX.']
+  ];
+  const PAL = ['#3f7dff', '#ff2d95', '#39ff14', '#ffd166', '#b96bff', '#4de3ff', '#ff8a3d', '#ff4d6d'];
+
+  let cards, faceUp, lockT, moves, matched, over, t = 0, last, started, paused;
+  let best = Number(localStorage.getItem('pixel-game-memory-best') || 0);
+
+  function init() {
+    const deck = [];
+    for (let i = 0; i < 8; i++) { deck.push(i); deck.push(i); }
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = deck[i]; deck[i] = deck[j]; deck[j] = tmp;
+    }
+    cards = deck.map(s => ({ sym: s, face: false, match: false }));
+    faceUp = []; lockT = 0;
+    moves = 0; matched = 0; over = false;
+  }
+
+  function win() {
+    over = true;
+    if (!best || moves < best) {
+      best = moves;
+      localStorage.setItem('pixel-game-memory-best', String(best));
+    }
+    document.getElementById('endTitle').textContent = 'YOU WIN!';
+    document.getElementById('finalScore').textContent = 'MOVES ' + moves + '  BEST ' + best;
+    document.getElementById('overOverlay').classList.remove('hidden');
+    sfx.win();
+  }
+
+  function flip(i) {
+    if (lockT > 0 || cards[i].face || cards[i].match) return;
+    cards[i].face = true;
+    faceUp.push(i);
+    sfx.flip();
+    if (faceUp.length === 2) {
+      moves++;
+      const a = faceUp[0], b = faceUp[1];
+      if (cards[a].sym === cards[b].sym) {
+        cards[a].match = cards[b].match = true;
+        faceUp = [];
+        matched += 2;
+        sfx.match();
+        if (matched === N * N) win();
+      } else {
+        lockT = 0.7;
+        sfx.wrong();
+      }
+    }
+  }
+
+  function update(dt) {
+    if (lockT > 0) {
+      lockT -= dt;
+      if (lockT <= 0) {
+        faceUp.forEach(i => { cards[i].face = false; });
+        faceUp = [];
+      }
+    }
+  }
+
+  /* ---------------- input ---------------- */
+  const keys = {};
+  document.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (e.repeat) return;
+    keys[k] = true;
+    if (k === 'p') togglePause();
+    if (k === 'm') toggleMute();
+    if (k === 'enter' && !started) startGame();
+    if (k === 'enter' && over) rematch();
+  });
+  document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+  window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+  canvas.addEventListener('click', (e) => {
+    if (!started || paused || over) return;
+    const r = canvas.getBoundingClientRect();
+    const x = (e.clientX - r.left) * (W / r.width);
+    const y = (e.clientY - r.top) * (H / r.height);
+    const cx = Math.floor((x - OFF) / (CARD + GAP));
+    const cy = Math.floor((y - OFF) / (CARD + GAP));
+    if (cx < 0 || cx >= N || cy < 0 || cy >= N) return;
+    flip(cy * N + cx);
+  });
+
+  function toggleMute() {
+    muted = !muted;
+    document.getElementById('muteBtn').textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
+  }
+  function togglePause() {
+    if (!started || over) return;
+    paused = !paused;
+    document.getElementById('pauseOverlay').classList.toggle('hidden', !paused);
+  }
+  function startGame() {
+    if (started) return;
+    started = true;
+    init();
+    document.getElementById('startOverlay').classList.add('hidden');
+  }
+  function rematch() {
+    document.getElementById('overOverlay').classList.add('hidden');
+    init();
+    started = true;
+  }
+  document.getElementById('startBtn').addEventListener('click', startGame);
+  document.getElementById('restartBtn').addEventListener('click', rematch);
+  document.getElementById('muteBtn').addEventListener('click', toggleMute);
+
+  /* ---------------- drawing ---------------- */
+  function drawSym(id, cx, cy, s) {
+    const map = SYMS[id];
+    const p = s / 5;
+    for (let y = 0; y < 5; y++) {
+      for (let x = 0; x < 5; x++) {
+        if (map[y][x] === 'X') ctx.fillRect(cx - s / 2 + x * p, cy - s / 2 + y * p, p, p);
+      }
+    }
+  }
+
+  function draw() {
+    ctx.fillStyle = '#0a0618';
+    ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < cards.length; i++) {
+      const c = cards[i];
+      const x = OFF + (i % N) * (CARD + GAP);
+      const y = OFF + Math.floor(i / N) * (CARD + GAP);
+      if (c.match) {
+        ctx.fillStyle = '#123a24';
+        ctx.fillRect(x, y, CARD, CARD);
+        ctx.fillStyle = '#39ff14';
+        drawSym(c.sym, x + CARD / 2, y + CARD / 2, 44);
+      } else if (c.face) {
+        ctx.fillStyle = '#2a1b4a';
+        ctx.fillRect(x, y, CARD, CARD);
+        ctx.fillStyle = PAL[c.sym];
+        drawSym(c.sym, x + CARD / 2, y + CARD / 2, 44);
+      } else {
+        const bounce = faceUp.length === 1 ? Math.sin(t * 8) * 2 : 0;
+        ctx.fillStyle = '#3b2b5e';
+        ctx.fillRect(x, y + bounce, CARD, CARD);
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.fillRect(x, y + bounce, CARD, 6);
+        ctx.fillStyle = '#c084fc';
+        ctx.font = '800 30px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('?', x + CARD / 2, y + bounce + CARD / 2 + 2);
+        ctx.textBaseline = 'alphabetic';
+      }
+    }
+    // HUD
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 14px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('MOVES ' + moves, 8, 18);
+    ctx.textAlign = 'right';
+    ctx.fillText('BEST ' + (best || '-'), W - 8, 18);
+  }
+
+  /* ---------------- main loop ---------------- */
+  function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    if (typeof last !== 'number' || !isFinite(last)) last = now;
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    t += dt;
+    if (started && !paused && !over) update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  init();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

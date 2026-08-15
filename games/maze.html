@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Pixel Maze &#x2014; escape ten procedurally generated mazes against the clock.">
+<title>Pixel Maze &#x2014; Pixel Game</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0618'/><rect x='2' y='2' width='12' height='12' fill='%238bff7a'/></svg>">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .stage-wrap { max-width: 420px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="top-bar">
+    <a class="exit-arrow" href="../index.html" title="Back to all games">&#x2190;</a>
+    <h1 class="game-title">PIXEL MAZE</h1>
+    <button class="mute-btn" id="muteBtn">SOUND: ON</button>
+  </div>
+
+  <div class="stage-wrap">
+    <canvas id="game" width="420" height="420"></canvas>
+
+    <div id="startOverlay" class="overlay">
+      <h2>PIXEL MAZE</h2>
+      <p class="ov-sub">&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x65B9;&#x5411;&#x952E; / WASD &#x79FB;&#x52A8;</p>
+      <button class="btn" id="startBtn">START</button>
+      <p class="ov-sub" style="font-size:11px">&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x4ECE;&#x5165;&#x53E3;&#x8D70;&#x5230;&#x7EFF;&#x8272;&#x51FA;&#x53E3;&#xFF0C;&#x5173;&#x5361;&#x8D8A;&#x6765;&#x8D8A;&#x96BE;</p>
+    </div>
+
+    <div id="pauseOverlay" class="overlay hidden">
+      <h2>PAUSED</h2>
+      <p class="ov-sub">press P to resume</p>
+    </div>
+
+    <div id="overOverlay" class="overlay hidden">
+      <h2 id="endTitle">YOU WIN!</h2>
+      <p class="ov-sub" id="finalScore">TOTAL 0.0s &#x00B7; BEST -</p>
+      <button class="btn" id="restartBtn">PLAY AGAIN</button>
+      <p class="ov-sub" style="font-size:11px">or press ENTER</p>
+    </div>
+  </div>
+
+  <p class="controls-hint">ARROWS / WASD MOVE &#x00B7; P PAUSE &#x00B7; M SOUND</p>
+</div>
+
+<script>/* ============================================================
+   PIXEL MAZE - escape 10 generated mazes (vanilla canvas)
+   ============================================================ */
+(function () {
+  'use strict';
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const SPEED = 300, LEVEL_TARGET = 10;
+
+  /* ---------------- audio (tiny WebAudio synth) ---------------- */
+  let actx = null, muted = false;
+  function ensureAudio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function tone(f0, f1, dur, type, vol, delay) {
+    if (muted) return;
+    const ac = ensureAudio(); if (!ac) return;
+    const t0 = ac.currentTime + (delay || 0);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(f0, t0);
+    if (f1) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t0 + dur);
+    g.gain.setValueAtTime(vol || 0.1, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  const sfx = {
+    step:  () => tone(200, 240, 0.03, 'square', 0.02),
+    clear: () => [440, 660, 880].forEach((f, i) => tone(f, f, 0.12, 'square', 0.09, i * 0.1)),
+    win:   () => [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.14, 'square', 0.1, i * 0.14))
+  };
+
+  /* ---------------- state ---------------- */
+  let N, CELL, maze, px, py, S, level, totalT, lvT, over, t = 0, last, started, paused;
+  let best = Number(localStorage.getItem('pixel-game-maze-best') || 0);
+
+  function genMaze() {
+    N = 5 + ((level - 1) % 4) * 2;   // 5,7,9,11 - loops every 4 levels
+    CELL = Math.floor(W / N);
+    maze = [];
+    for (let y = 0; y < N; y++) {
+      maze.push([]);
+      for (let x = 0; x < N; x++) maze[y].push({ n: 1, s: 1, w: 1, e: 1, v: false });
+    }
+    // recursive-backtracking carve
+    const stack = [[0, 0]];
+    maze[0][0].v = true;
+    while (stack.length) {
+      const cur = stack[stack.length - 1];
+      const cx = cur[0], cy = cur[1];
+      const opts = [];
+      if (cx > 0 && !maze[cy][cx - 1].v) opts.push([cx - 1, cy, 'w']);
+      if (cx < N - 1 && !maze[cy][cx + 1].v) opts.push([cx + 1, cy, 'e']);
+      if (cy > 0 && !maze[cy - 1][cx].v) opts.push([cx, cy - 1, 'n']);
+      if (cy < N - 1 && !maze[cy + 1][cx].v) opts.push([cx, cy + 1, 's']);
+      if (!opts.length) { stack.pop(); continue; }
+      const nxt = opts[Math.floor(Math.random() * opts.length)];
+      const nx = nxt[0], ny = nxt[1], d = nxt[2];
+      if (d === 'w') { maze[cy][cx].w = 0; maze[ny][nx].e = 0; }
+      if (d === 'e') { maze[cy][cx].e = 0; maze[ny][nx].w = 0; }
+      if (d === 'n') { maze[cy][cx].n = 0; maze[ny][nx].s = 0; }
+      if (d === 's') { maze[cy][cx].s = 0; maze[ny][nx].n = 0; }
+      maze[ny][nx].v = true;
+      stack.push([nx, ny]);
+    }
+    S = CELL * 0.55;
+    px = CELL / 2 - S / 2;
+    py = CELL / 2 - S / 2;
+    lvT = 0;
+  }
+
+  function init() {
+    level = 1; totalT = 0; over = false;
+    genMaze();
+  }
+
+  function endGame() {
+    over = true;
+    if (!best || totalT < best) {
+      best = totalT;
+      localStorage.setItem('pixel-game-maze-best', String(best));
+    }
+    document.getElementById('endTitle').textContent = 'YOU WIN!';
+    document.getElementById('finalScore').textContent = 'TOTAL ' + totalT.toFixed(1) + 's  BEST ' + (best ? best.toFixed(1) + 's' : '-');
+    document.getElementById('overOverlay').classList.remove('hidden');
+    sfx.win();
+  }
+
+  /* ---------------- input ---------------- */
+  const keys = {};
+  document.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown'].includes(k)) e.preventDefault();
+    if (e.repeat) return;
+    keys[k] = true;
+    if (k === 'p') togglePause();
+    if (k === 'm') toggleMute();
+    if (k === 'enter' && !started) startGame();
+    if (k === 'enter' && over) rematch();
+  });
+  document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+  window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+  function toggleMute() {
+    muted = !muted;
+    document.getElementById('muteBtn').textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
+  }
+  function togglePause() {
+    if (!started || over) return;
+    paused = !paused;
+    document.getElementById('pauseOverlay').classList.toggle('hidden', !paused);
+  }
+  function startGame() {
+    if (started) return;
+    started = true;
+    init();
+    document.getElementById('startOverlay').classList.add('hidden');
+    sfx.clear();
+  }
+  function rematch() {
+    document.getElementById('overOverlay').classList.add('hidden');
+    init();
+    started = true;
+  }
+  document.getElementById('startBtn').addEventListener('click', startGame);
+  document.getElementById('restartBtn').addEventListener('click', rematch);
+  document.getElementById('muteBtn').addEventListener('click', toggleMute);  /* ---------------- update ---------------- */
+  function update(dt) {
+    lvT += dt; totalT += dt;
+    let dx = 0, dy = 0;
+    if (keys.arrowleft || keys.a) dx -= 1;
+    if (keys.arrowright || keys.d) dx += 1;
+    if (keys.arrowup || keys.w) dy -= 1;
+    if (keys.arrowdown || keys.s) dy += 1;
+
+    // move, but clamp inside the current cell when a wall blocks the way
+    let nx = px + dx * SPEED * dt;
+    let ny = py + dy * SPEED * dt;
+    const cx = Math.floor((px + S / 2) / CELL), cy = Math.floor((py + S / 2) / CELL);
+    const c = maze[cy][cx];
+    if (dx > 0 && !c.e) nx = Math.min(nx, (cx + 1) * CELL - S);
+    if (dx < 0 && !c.w) nx = Math.max(nx, cx * CELL);
+    if (dy > 0 && !c.s) ny = Math.min(ny, (cy + 1) * CELL - S);
+    if (dy < 0 && !c.n) ny = Math.max(ny, cy * CELL);
+    px = nx; py = ny;
+
+    // reached the exit cell?
+    const ex = Math.floor((px + S / 2) / CELL), ey = Math.floor((py + S / 2) / CELL);
+    if (ex === N - 1 && ey === N - 1) {
+      level++;
+      if (level > LEVEL_TARGET) { endGame(); return; }
+      sfx.clear();
+      genMaze();
+    }
+  }
+
+  /* ---------------- drawing ---------------- */
+  function draw() {
+    ctx.fillStyle = '#0a0618';
+    ctx.fillRect(0, 0, W, H);
+    // exit glow
+    const pulse = 0.2 + 0.3 * Math.abs(Math.sin(t * 3));
+    ctx.fillStyle = 'rgba(80,255,120,' + pulse.toFixed(2) + ')';
+    ctx.fillRect((N - 1) * CELL + 2, (N - 1) * CELL + 2, CELL - 4, CELL - 4);
+    // walls
+    ctx.strokeStyle = '#8bff7a';
+    ctx.lineWidth = Math.max(2, CELL / 14);
+    ctx.beginPath();
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        const c = maze[y][x];
+        const X = x * CELL, Y = y * CELL;
+        if (c.n) { ctx.moveTo(X, Y); ctx.lineTo(X + CELL, Y); }
+        if (c.s) { ctx.moveTo(X, Y + CELL); ctx.lineTo(X + CELL, Y + CELL); }
+        if (c.w) { ctx.moveTo(X, Y); ctx.lineTo(X, Y + CELL); }
+        if (c.e) { ctx.moveTo(X + CELL, Y); ctx.lineTo(X + CELL, Y + CELL); }
+      }
+    }
+    ctx.stroke();
+    // player - pixel explorer
+    const cx = px + S / 2, cy = py + S / 2;
+    ctx.fillStyle = '#4de3ff';
+    ctx.fillRect(cx - S * 0.24, cy - S * 0.34, S * 0.48, S * 0.42);
+    ctx.fillRect(cx - S * 0.17, cy - S * 0.47, S * 0.34, S * 0.15);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(cx + S * 0.05, cy - S * 0.4, S * 0.09, S * 0.09);
+    // HUD
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 14px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('LEVEL ' + level + '/' + LEVEL_TARGET, 8, 20);
+    ctx.textAlign = 'right';
+    ctx.fillText('TIME ' + totalT.toFixed(1) + 's', W - 8, 20);
+  }
+
+  /* ---------------- main loop ---------------- */
+  function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    if (typeof last !== 'number' || !isFinite(last)) last = now;
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    t += dt;
+    if (started && !paused && !over) update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  init();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Pixel Asteroids &#x2014; blast the drifting rocks and survive five waves.">
+<title>Pixel Asteroids &#x2014; Pixel Game</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0618'/><rect x='2' y='2' width='12' height='12' fill='%23ff7a6b'/></svg>">
+<link rel="stylesheet" href="../style.css">
+<style>
+  .stage-wrap { max-width: 480px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="top-bar">
+    <a class="exit-arrow" href="../index.html" title="Back to all games">&#x2190;</a>
+    <h1 class="game-title">PIXEL ASTEROIDS</h1>
+    <button class="mute-btn" id="muteBtn">SOUND: ON</button>
+  </div>
+
+  <div class="stage-wrap">
+    <canvas id="game" width="480" height="480"></canvas>
+
+    <div id="startOverlay" class="overlay">
+      <h2>PIXEL ASTEROIDS</h2>
+      <p class="ov-sub">&#x600E;&#x4E48;&#x73A9;&#xFF1A;&#x2190;&#x2192; &#x65CB;&#x8F6C; &#x00B7; &#x2191; &#x63A8;&#x8FDB; &#x00B7; &#x7A7A;&#x683C; &#x5C04;&#x51FB;</p>
+      <button class="btn" id="startBtn">START</button>
+      <p class="ov-sub" style="font-size:11px">&#x600E;&#x4E48;&#x8D62;&#xFF1A;&#x6253;&#x788E;&#x6240;&#x6709;&#x5C0F;&#x884C;&#x661F;&#xFF0C;&#x522B;&#x88AB;&#x649E;&#x5230;</p>
+    </div>
+
+    <div id="pauseOverlay" class="overlay hidden">
+      <h2>PAUSED</h2>
+      <p class="ov-sub">press P to resume</p>
+    </div>
+
+    <div id="overOverlay" class="overlay hidden">
+      <h2 id="endTitle">GAME OVER</h2>
+      <p class="ov-sub" id="finalScore">SCORE 0 &#x00B7; BEST 0</p>
+      <button class="btn" id="restartBtn">PLAY AGAIN</button>
+      <p class="ov-sub" style="font-size:11px">or press ENTER</p>
+    </div>
+  </div>
+
+  <p class="controls-hint">&#x2190;&#x2192; ROTATE &#x00B7; &#x2191; THRUST &#x00B7; SPACE SHOOT &#x00B7; P PAUSE &#x00B7; M SOUND</p>
+</div>
+
+<script>/* ============================================================
+   PIXEL ASTEROIDS - five waves of drifting rocks (vanilla)
+   ============================================================ */
+(function () {
+  'use strict';
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const ROT = 3.1, THRUST = 260, FRICTION = 0.985, B_SPEED = 470, B_LIFE = 1.1;
+  const WAVE_TARGET = 5;
+
+  /* ---------------- audio (tiny WebAudio synth) ---------------- */
+  let actx = null, muted = false;
+  function ensureAudio() {
+    if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } }
+    if (actx.state === 'suspended') actx.resume();
+    return actx;
+  }
+  function tone(f0, f1, dur, type, vol, delay) {
+    if (muted) return;
+    const ac = ensureAudio(); if (!ac) return;
+    const t0 = ac.currentTime + (delay || 0);
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'square';
+    o.frequency.setValueAtTime(f0, t0);
+    if (f1) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t0 + dur);
+    g.gain.setValueAtTime(vol || 0.1, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  const sfx = {
+    shot:  () => tone(600, 300, 0.06, 'square', 0.05),
+    boom:  () => { tone(200, 50, 0.28, 'sawtooth', 0.15); tone(90, 35, 0.2, 'square', 0.1, 0.03); },
+    crash: () => { tone(300, 40, 0.4, 'sawtooth', 0.16); tone(140, 30, 0.35, 'square', 0.1, 0.05); },
+    wave:  () => [440, 660, 880].forEach((f, i) => tone(f, f, 0.12, 'square', 0.09, i * 0.1)),
+    win:   () => [523, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.14, 'square', 0.1, i * 0.14)),
+    lose:  () => [400, 300, 200, 140].forEach((f, i) => tone(f, f, 0.16, 'sawtooth', 0.09, i * 0.16))
+  };
+
+  /* ---------------- state ---------------- */
+  let ship, rocks, bullets, parts, lives, score, wave, over, t = 0, last, started, paused;
+  let best = Number(localStorage.getItem('pixel-game-asteroids-best') || 0);
+
+  function makeRock(r, x, y, vx, vy) {
+    const pts = [];
+    const n = 9 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < n; i++) pts.push(r * (0.72 + Math.random() * 0.28));
+    return { x, y, vx, vy, r, pts, off: Math.random() * 6.28 };
+  }
+
+  function spawnWave() {
+    rocks = [];
+    for (let i = 0; i < wave + 3; i++) {
+      let x, y;
+      do { x = Math.random() * W; y = Math.random() * H; } while (Math.hypot(x - W / 2, y - H / 2) < 130);
+      rocks.push(makeRock(38, x, y, (Math.random() - 0.5) * 70, (Math.random() - 0.5) * 70));
+    }
+  }
+
+  function init() {
+    ship = { x: W / 2, y: H / 2, a: -Math.PI / 2, vx: 0, vy: 0, inv: 2, thrust: false };
+    bullets = []; parts = [];
+    lives = 3; score = 0; wave = 1; over = false;
+    spawnWave();
+  }
+
+  function spawnParts(x, y, n, color) {
+    for (let i = 0; i < n; i++) {
+      parts.push({ x, y, vx: (Math.random() - 0.5) * 360, vy: (Math.random() - 0.5) * 360, life: 0.5, color });
+    }
+  }
+
+  function endGame(won) {
+    over = true;
+    if (score > best) { best = score; localStorage.setItem('pixel-game-asteroids-best', String(best)); }
+    document.getElementById('endTitle').textContent = won ? 'YOU WIN!' : 'GAME OVER';
+    document.getElementById('finalScore').textContent = 'SCORE ' + score + '  BEST ' + best;
+    document.getElementById('overOverlay').classList.remove('hidden');
+    if (won) sfx.win(); else sfx.lose();
+  }
+
+  function wrap(v, m) { return v < 0 ? v + m : v >= m ? v - m : v; }
+
+  /* ---------------- input ---------------- */
+  const keys = {};
+  document.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (['arrowleft', 'arrowright', 'arrowup', ' '].includes(k)) e.preventDefault();
+    if (e.repeat) return;
+    keys[k] = true;
+    if (k === 'p') togglePause();
+    if (k === 'm') toggleMute();
+    if (k === 'enter' && !started) startGame();
+    if (k === 'enter' && over) rematch();
+  });
+  document.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+  window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+
+  function toggleMute() {
+    muted = !muted;
+    document.getElementById('muteBtn').textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
+  }
+  function togglePause() {
+    if (!started || over) return;
+    paused = !paused;
+    document.getElementById('pauseOverlay').classList.toggle('hidden', !paused);
+  }
+  function startGame() {
+    if (started) return;
+    started = true;
+    init();
+    document.getElementById('startOverlay').classList.add('hidden');
+    sfx.wave();
+  }
+  function rematch() {
+    document.getElementById('overOverlay').classList.add('hidden');
+    init();
+    started = true;
+  }
+  document.getElementById('startBtn').addEventListener('click', startGame);
+  document.getElementById('restartBtn').addEventListener('click', rematch);
+  document.getElementById('muteBtn').addEventListener('click', toggleMute);
+
+  /* ---------------- update ---------------- */
+  function update(dt) {
+    // ship control
+    if (keys.arrowleft || keys.a) ship.a -= ROT * dt;
+    if (keys.arrowright || keys.d) ship.a += ROT * dt;
+    ship.thrust = !!(keys.arrowup || keys.w);
+    if (ship.thrust) {
+      ship.vx += Math.cos(ship.a) * THRUST * dt;
+      ship.vy += Math.sin(ship.a) * THRUST * dt;
+    }
+    ship.vx *= FRICTION; ship.vy *= FRICTION;
+    ship.x = wrap(ship.x + ship.vx * dt, W);
+    ship.y = wrap(ship.y + ship.vy * dt, H);
+    ship.inv -= dt;
+
+    // shooting
+    if (keys[' '] && bullets.length < 4) {
+      bullets.push({
+        x: ship.x + Math.cos(ship.a) * 14,
+        y: ship.y + Math.sin(ship.a) * 14,
+        vx: Math.cos(ship.a) * B_SPEED + ship.vx,
+        vy: Math.sin(ship.a) * B_SPEED + ship.vy,
+        life: B_LIFE
+      });
+      sfx.shot();
+    }
+    for (let i = bullets.length - 1; i >= 0; i--) {
+      const b = bullets[i];
+      b.life -= dt;
+      if (b.life <= 0) { bullets.splice(i, 1); continue; }
+      b.x = wrap(b.x + b.vx * dt, W);
+      b.y = wrap(b.y + b.vy * dt, H);
+    }
+
+    // rocks drift
+    for (let i = 0; i < rocks.length; i++) {
+      const r = rocks[i];
+      r.x = wrap(r.x + r.vx * dt, W);
+      r.y = wrap(r.y + r.vy * dt, H);
+    }
+
+    // bullets vs rocks
+    for (let i = rocks.length - 1; i >= 0; i--) {
+      const r = rocks[i];
+      for (let j = bullets.length - 1; j >= 0; j--) {
+        const b = bullets[j];
+        if (Math.hypot(b.x - r.x, b.y - r.y) < r.r + 4) {
+          bullets.splice(j, 1);
+          rocks.splice(i, 1);
+          score += r.r > 26 ? 20 : r.r > 13 ? 50 : 100;
+          spawnParts(r.x, r.y, 10, '#ff7a6b');
+          sfx.boom();
+          if (r.r > 13) {
+            rocks.push(makeRock(r.r / 2, r.x, r.y, (Math.random() - 0.5) * 120, (Math.random() - 0.5) * 120));
+            rocks.push(makeRock(r.r / 2, r.x, r.y, (Math.random() - 0.5) * 120, (Math.random() - 0.5) * 120));
+          }
+          break;
+        }
+      }
+    }
+
+    // ship vs rocks
+    if (ship.inv <= 0) {
+      for (let i = 0; i < rocks.length; i++) {
+        const r = rocks[i];
+        if (Math.hypot(r.x - ship.x, r.y - ship.y) < r.r + 11) {
+          lives--;
+          ship.inv = 1.6;
+          ship.vx = 0; ship.vy = 0;
+          spawnParts(ship.x, ship.y, 20, '#4de3ff');
+          sfx.crash();
+          if (lives <= 0) { endGame(false); return; }
+          break;
+        }
+      }
+    }
+
+    // wave cleared?
+    if (!rocks.length) {
+      wave++;
+      if (wave > WAVE_TARGET) { endGame(true); return; }
+      sfx.wave();
+      spawnWave();
+    }
+  }  /* ---------------- drawing ---------------- */
+  function draw() {
+    ctx.fillStyle = '#0a0618';
+    ctx.fillRect(0, 0, W, H);
+    // stars
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 50; i++) {
+      const sx = (i * 97.3) % W, sy = (i * 61.7) % H;
+      ctx.globalAlpha = 0.15 + 0.4 * Math.abs(Math.sin(t + i * 2));
+      ctx.fillRect(sx, sy, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+    // rocks (jagged polygons)
+    for (let i = 0; i < rocks.length; i++) {
+      const r = rocks[i];
+      const rot = r.off + t * 0.4;
+      ctx.fillStyle = r.r > 26 ? '#8a7a6a' : r.r > 13 ? '#a8967f' : '#c4ad92';
+      ctx.beginPath();
+      for (let j = 0; j < r.pts.length; j++) {
+        const a = rot + j / r.pts.length * 6.283;
+        const x = r.x + Math.cos(a) * r.pts[j];
+        const y = r.y + Math.sin(a) * r.pts[j];
+        if (j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillRect(r.x - 2, r.y - 2, 4, 4);
+    }
+    // ship
+    if (ship.inv <= 0 || Math.sin(t * 20) > -0.3) {
+      ctx.save();
+      ctx.translate(ship.x, ship.y);
+      ctx.rotate(ship.a);
+      ctx.fillStyle = '#4de3ff';
+      ctx.beginPath();
+      ctx.moveTo(14, 0); ctx.lineTo(-10, -9); ctx.lineTo(-5, 0); ctx.lineTo(-10, 9);
+      ctx.closePath();
+      ctx.fill();
+      if (ship.thrust) {
+        ctx.fillStyle = '#ffb03d';
+        ctx.fillRect(-14, -4, 9, 8);
+      }
+      ctx.restore();
+    }
+    // bullets
+    ctx.fillStyle = '#ffe94a';
+    for (let i = 0; i < bullets.length; i++) {
+      ctx.fillRect(bullets[i].x - 2, bullets[i].y - 2, 4, 4);
+    }
+    // particles
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i];
+      p.life -= 1 / 60; p.x += p.vx / 60; p.y += p.vy / 60;
+      ctx.globalAlpha = Math.max(0, p.life / 0.5);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+    }
+    ctx.globalAlpha = 1;
+    // HUD
+    ctx.fillStyle = '#fff';
+    ctx.font = '800 14px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('SCORE ' + score, 10, 26);
+    ctx.textAlign = 'center';
+    ctx.fillText('WAVE ' + wave + '/' + WAVE_TARGET, W / 2, 26);
+    ctx.textAlign = 'right';
+    ctx.fillText('BEST ' + best, W - 10, 26);
+    for (let i = 0; i < lives; i++) {
+      ctx.fillStyle = '#4de3ff';
+      ctx.fillRect(W - 10 - (i + 1) * 22, H - 20, 16, 6);
+    }
+  }
+
+  /* ---------------- main loop ---------------- */
+  function loop(now) {
+    if (typeof now !== 'number' || !isFinite(now)) now = performance.now();
+    if (typeof last !== 'number' || !isFinite(last)) last = now;
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    t += dt;
+    if (started && !paused && !over) update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  init();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
