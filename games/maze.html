@@ -46,6 +46,7 @@
   <p class="controls-hint">ARROWS / WASD MOVE &#x00B7; P PAUSE &#x00B7; M SOUND</p>
 </div>
 
+<script src="../points.js"></script>
 <script>/* ============================================================
    PIXEL MAZE - escape 10 generated mazes (vanilla canvas)
    ============================================================ */
@@ -127,7 +128,7 @@
   }
 
   function endGame() {
-    over = true;
+    over = true; window.PGPoints && PGPoints.afterGame();
     if (!best || totalT < best) {
       best = totalT;
       localStorage.setItem('pixel-game-maze-best', String(best));

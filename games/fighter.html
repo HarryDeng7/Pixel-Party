@@ -49,6 +49,7 @@
   <p class="controls-hint">A/D MOVE · W JUMP · S BLOCK · J PUNCH · K KICK · P PAUSE · M SOUND</p>
 </div>
 
+<script src="../points.js"></script>
 <script>
 /* ============================================================
    PIXEL FIGHTER — horizontal 1v1 brawler (vanilla canvas)
@@ -139,6 +140,7 @@
 
   function endMatch(winnerName) {
     matchOver = true;
+    window.PGPoints && PGPoints.afterGame();
     lastWinner = winnerName;
     const el = document.getElementById('endTitle');
     el.textContent = winnerName + ' WINS!';

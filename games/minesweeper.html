@@ -46,6 +46,7 @@
   <p class="controls-hint">LEFT CLICK REVEAL &#x00B7; RIGHT CLICK FLAG &#x00B7; P PAUSE &#x00B7; M SOUND</p>
 </div>
 
+<script src="../points.js"></script>
 <script>/* ============================================================
    PIXEL MINESWEEPER - 9x9, 10 mines (vanilla canvas)
    ============================================================ */
@@ -141,7 +142,7 @@
   }
 
   function win() {
-    over = true; won = true;
+    over = true; window.PGPoints && PGPoints.afterGame(); won = true;
     if (!best || time < best) {
       best = time;
       localStorage.setItem('pixel-game-mines-best', String(best));
@@ -153,7 +154,7 @@
   }
 
   function lose(x, y) {
-    over = true; won = false;
+    over = true; window.PGPoints && PGPoints.afterGame(); won = false;
     grid[idx(x, y)].rev = true;
     for (let i = 0; i < grid.length; i++) if (grid[i].mine) grid[i].rev = true;
     document.getElementById('endTitle').textContent = 'GAME OVER';

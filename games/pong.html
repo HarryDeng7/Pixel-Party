@@ -45,6 +45,7 @@
   <p class="controls-hint">W/S OR &#x2191;/&#x2193; MOVE &#x00B7; P PAUSE &#x00B7; M SOUND &#x00B7; FIRST TO 7 WINS</p>
 </div>
 
+<script src="../points.js"></script>
 <script>/* ============================================================
    PIXEL PONG - classic table tennis duel, first to 7 (vanilla)
    ============================================================ */
@@ -109,7 +110,7 @@
     if (who === 'p') sp++; else sc++;
     sfx.score();
     if (sp >= WIN || sc >= WIN) {
-      over = true;
+      over = true; window.PGPoints && PGPoints.afterGame();
       saveBest();
       document.getElementById('endTitle').textContent = sp >= WIN ? 'YOU WIN!' : 'CPU WINS!';
       document.getElementById('finalScore').textContent = 'SCORE ' + sp + ' - ' + sc + '  BEST ' + best;

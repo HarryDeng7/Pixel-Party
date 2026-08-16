@@ -46,6 +46,7 @@
   <p class="controls-hint">&#x2190;&#x2192; MOVE &#x00B7; SPACE SHOOT &#x00B7; P PAUSE &#x00B7; M SOUND</p>
 </div>
 
+<script src="../points.js"></script>
 <script>/* ============================================================
    PIXEL INVADERS - shoot the descending horde (vanilla canvas)
    ============================================================ */
@@ -115,7 +116,7 @@
   }
 
   function endGame(won) {
-    over = true;
+    over = true; window.PGPoints && PGPoints.afterGame();
     document.getElementById('endTitle').textContent = won ? 'YOU WIN!' : 'GAME OVER';
     document.getElementById('finalScore').textContent = 'SCORE ' + score + '  BEST ' + best;
     document.getElementById('overOverlay').classList.remove('hidden');

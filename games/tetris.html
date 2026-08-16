@@ -44,6 +44,7 @@
   <p class="controls-hint">ARROWS MOVE · ROTATE · DROP — SPACE HARD DROP · P PAUSE · M SOUND</p>
 </div>
 
+<script src="../points.js"></script>
 <script>
 (function () {
   'use strict';
@@ -167,7 +168,7 @@
     started = true;
   }
   function gameOver() {
-    over = true;
+    over = true; window.PGPoints && PGPoints.afterGame();
     sfx.over();
     if (score > best) {
       best = score;

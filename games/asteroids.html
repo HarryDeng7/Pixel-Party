@@ -46,6 +46,7 @@
   <p class="controls-hint">&#x2190;&#x2192; ROTATE &#x00B7; &#x2191; THRUST &#x00B7; SPACE SHOOT &#x00B7; P PAUSE &#x00B7; M SOUND</p>
 </div>
 
+<script src="../points.js"></script>
 <script>/* ============================================================
    PIXEL ASTEROIDS - five waves of drifting rocks (vanilla)
    ============================================================ */
@@ -120,7 +121,7 @@
   }
 
   function endGame(won) {
-    over = true;
+    over = true; window.PGPoints && PGPoints.afterGame();
     if (score > best) { best = score; localStorage.setItem('pixel-game-asteroids-best', String(best)); }
     document.getElementById('endTitle').textContent = won ? 'YOU WIN!' : 'GAME OVER';
     document.getElementById('finalScore').textContent = 'SCORE ' + score + '  BEST ' + best;

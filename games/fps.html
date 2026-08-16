@@ -37,6 +37,7 @@
   <p class="controls-hint">CLICK = LOCK MOUSE &amp; SHOOT · WASD = MOVE · MOUSE = AIM · ESC = PAUSE · M = SOUND</p>
 </div>
 
+<script src="../points.js"></script>
 <script>
 /* ============================================================
    PIXEL SHOOTER — first-person raycasting engine (vanilla)
@@ -309,7 +310,7 @@
       }
     }
     if (kills >= ENEMY_TOTAL) {
-      state = 'over';
+      state = 'over'; window.PGPoints && PGPoints.afterGame();
       sfx.win();
       showOverlay('AREA CLEARED!', 'Score: ' + score + ' — all hostiles eliminated. Nice shooting.', 'win', true);
     }
@@ -362,7 +363,7 @@
         spawnHitParticles(p);
         if (p.hp <= 0) {
           p.hp = 0;
-          state = 'over';
+          state = 'over'; window.PGPoints && PGPoints.afterGame();
           sfx.lose();
           showOverlay('YOU DIED', 'Score: ' + score + ' — the demons got you. Try again?', 'lose', true);
         }

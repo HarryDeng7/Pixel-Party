@@ -46,6 +46,7 @@
   <p class="controls-hint">SPACE / CLICK / ↑ FLAP · P PAUSE · M SOUND</p>
 </div>
 
+<script src="../points.js"></script>
 <script>
 (function () {
   'use strict';
@@ -97,7 +98,7 @@
     sfx.flap();
   }
   function gameOver() {
-    over = true;
+    over = true; window.PGPoints && PGPoints.afterGame();
     sfx.over();
     if (score > best) {
       best = score;

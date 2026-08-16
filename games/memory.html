@@ -46,6 +46,7 @@
   <p class="controls-hint">CLICK TO FLIP &#x00B7; P PAUSE &#x00B7; M SOUND</p>
 </div>
 
+<script src="../points.js"></script>
 <script>/* ============================================================
    PIXEL MEMORY - match 8 pixel pairs (vanilla canvas)
    ============================================================ */
@@ -112,7 +113,7 @@
   }
 
   function win() {
-    over = true;
+    over = true; window.PGPoints && PGPoints.afterGame();
     if (!best || moves < best) {
       best = moves;
       localStorage.setItem('pixel-game-memory-best', String(best));

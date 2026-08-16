@@ -46,6 +46,7 @@
   <p class="controls-hint">CLICK COLUMN TO DROP &#x00B7; KEYS 1-7 &#x00B7; P PAUSE &#x00B7; M SOUND</p>
 </div>
 
+<script src="../points.js"></script>
 <script>/* ============================================================
    PIXEL CONNECT 4 - line up four vs the CPU (vanilla canvas)
    ============================================================ */
@@ -128,7 +129,7 @@
   }
 
   function endGame(pl) {
-    over = true;
+    over = true; window.PGPoints && PGPoints.afterGame();
     let title = 'DRAW!';
     if (pl === 1) {
       title = 'YOU WIN!';

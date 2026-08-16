@@ -46,6 +46,7 @@
   <p class="controls-hint">ARROWS / WASD SLIDE &#x00B7; P PAUSE &#x00B7; M SOUND</p>
 </div>
 
+<script src="../points.js"></script>
 <script>/* ============================================================
    PIXEL 2048 - merge tiles up to 2048 (vanilla canvas)
    ============================================================ */
@@ -167,13 +168,13 @@
     // win / lose checks
     for (let y = 0; y < N && !won; y++) for (let x = 0; x < N; x++) if (grid[y][x] >= 2048) won = true;
     if (won && !over) {
-      over = true;
+      over = true; window.PGPoints && PGPoints.afterGame();
       document.getElementById('endTitle').textContent = 'YOU WIN!';
       document.getElementById('finalScore').textContent = 'SCORE ' + score + '  BEST ' + best;
       document.getElementById('overOverlay').classList.remove('hidden');
       sfx.win();
     } else if (!canMove() && !over) {
-      over = true;
+      over = true; window.PGPoints && PGPoints.afterGame();
       document.getElementById('endTitle').textContent = 'GAME OVER';
       document.getElementById('finalScore').textContent = 'SCORE ' + score + '  BEST ' + best;
       document.getElementById('overOverlay').classList.remove('hidden');

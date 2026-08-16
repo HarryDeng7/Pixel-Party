@@ -46,6 +46,7 @@
   <p class="controls-hint">← → / MOUSE MOVE PADDLE · SPACE LAUNCH · P PAUSE · M SOUND</p>
 </div>
 
+<script src="../points.js"></script>
 <script>
 (function () {
   'use strict';
@@ -113,7 +114,7 @@
   }
   function setPaddle(v) { px = Math.max(PAD_W / 2, Math.min(W - PAD_W / 2, v)); }
   function endGame(win) {
-    over = true;
+    over = true; window.PGPoints && PGPoints.afterGame();
     if (win) sfx.win(); else sfx.lose();
     const el = document.getElementById('endTitle');
     el.textContent = win ? 'YOU WIN!' : 'GAME OVER';

@@ -45,6 +45,7 @@
   <p class="controls-hint">ARROWS / WASD STEER · P PAUSE · M SOUND · EAT = +10, FASTER EVERY 50 PTS</p>
 </div>
 
+<script src="../points.js"></script>
 <script>
 /* ============================================================
    PIXEL SNAKE — classic grid game (vanilla canvas)
@@ -119,6 +120,7 @@
 
   function gameOver() {
     running = false;
+    window.PGPoints && PGPoints.afterGame();
     if (score > best) { best = score; saveBest(); newRecord = true; }
     sfx.over();
     document.getElementById('finalScore').textContent =

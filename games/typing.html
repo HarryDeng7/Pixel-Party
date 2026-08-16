@@ -46,6 +46,7 @@
   <p class="controls-hint">TYPE THE FALLING WORDS &#x00B7; P PAUSE &#x00B7; M SOUND</p>
 </div>
 
+<script src="../points.js"></script>
 <script>/* ============================================================
    PIXEL TYPING - clear falling words, first to 100 (vanilla)
    ============================================================ */
@@ -97,7 +98,7 @@
   }
 
   function endGame(won) {
-    over = true;
+    over = true; window.PGPoints && PGPoints.afterGame();
     if (score > best) { best = score; localStorage.setItem('pixel-game-typing-best', String(best)); }
     document.getElementById('endTitle').textContent = won ? 'YOU WIN!' : 'GAME OVER';
     document.getElementById('finalScore').textContent = 'SCORE ' + score + '  BEST ' + best;

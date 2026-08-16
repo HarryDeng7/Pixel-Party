@@ -46,6 +46,7 @@
   <p class="controls-hint">&#x2190;&#x2192; / A D MOVE &#x00B7; P PAUSE &#x00B7; M SOUND</p>
 </div>
 
+<script src="../points.js"></script>
 <script>/* ============================================================
    PIXEL DODGE - survive 60 seconds of falling blocks (vanilla)
    ============================================================ */
@@ -95,7 +96,7 @@
   }
 
   function endGame(won) {
-    over = true;
+    over = true; window.PGPoints && PGPoints.afterGame();
     const s = Math.floor(time2);
     if (s > best) { best = s; localStorage.setItem('pixel-game-dodge-best', String(best)); }
     document.getElementById('endTitle').textContent = won ? 'YOU WIN!' : 'GAME OVER';
